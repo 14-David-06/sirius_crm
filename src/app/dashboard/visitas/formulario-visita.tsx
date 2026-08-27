@@ -5,12 +5,8 @@ import { useRouter } from "next/navigation";
 
 import { interpretarDictado, sumarDias } from "@/lib/dictado";
 import type { ClienteCore } from "@/lib/clientes";
-import {
-  RESULTADOS_VISITA,
-  TIPOS_VISITA,
-  type ProductoCore,
-  type Visita,
-} from "@/lib/crm";
+import { RESULTADOS_VISITA, TIPOS_VISITA, type Visita } from "@/lib/crm";
+import type { Producto } from "@/lib/productos";
 import { IconClose } from "../icons";
 import { Microfono } from "./microfono";
 
@@ -60,7 +56,7 @@ export function FormularioVisita({
   onCerrar,
 }: {
   clientes: ClienteCore[];
-  productos: ProductoCore[];
+  productos: Producto[];
   personal: { nombre: string; rol: string | null }[];
   visitas: Visita[];
   usuario: string;

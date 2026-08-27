@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
+import { LogoSirius } from "../logo";
 import { BotonSalir } from "./boton-salir";
 import {
   IconBell,
@@ -46,7 +47,12 @@ const grupos: { titulo: string; items: ItemNav[] }[] = [
         Icono: IconBuilding,
         href: "/dashboard/clientes",
       },
-      { id: "contactos", etiqueta: "Contactos", Icono: IconUsers },
+      {
+        id: "contactos",
+        etiqueta: "Contactos",
+        Icono: IconUsers,
+        href: "/dashboard/contactos",
+      },
       {
         id: "oportunidades",
         etiqueta: "Oportunidades",
@@ -66,8 +72,18 @@ const grupos: { titulo: string; items: ItemNav[] }[] = [
     titulo: "Operación",
     items: [
       { id: "pedidos", etiqueta: "Pedidos", Icono: IconCart },
-      { id: "productos", etiqueta: "Productos", Icono: IconPackage },
-      { id: "casos", etiqueta: "Casos", Icono: IconLifebuoy, contador: 17 },
+      {
+        id: "productos",
+        etiqueta: "Productos",
+        Icono: IconPackage,
+        href: "/dashboard/productos",
+      },
+      {
+        id: "casos",
+        etiqueta: "Casos",
+        Icono: IconLifebuoy,
+        href: "/dashboard/casos",
+      },
       { id: "tareas", etiqueta: "Tareas", Icono: IconCheckSquare, contador: 4 },
     ],
   },
@@ -135,15 +151,20 @@ function Sidebar({
         abierto ? "translate-x-0" : "-translate-x-full"
       }`}
     >
-      <div className="flex h-16 items-center justify-between border-b border-slate-200 px-5 dark:border-white/10">
-        <span className="text-base font-semibold tracking-tight">
-          Sirius <span className="text-blue-700 dark:text-blue-400">CRM</span>
-        </span>
+      <div className="flex h-16 items-center justify-between gap-3 border-b border-slate-200 px-5 dark:border-white/10">
+        <Link
+          href="/dashboard"
+          onClick={onCerrar}
+          title="Ir al inicio"
+          className="flex items-center rounded-md focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none"
+        >
+          <LogoSirius />
+        </Link>
         <button
           type="button"
           onClick={onCerrar}
           aria-label="Cerrar menú"
-          className="cursor-pointer rounded-lg p-2 text-slate-600 transition-colors duration-200 hover:bg-slate-100 lg:hidden dark:text-slate-300 dark:hover:bg-white/10"
+          className="-mr-2 cursor-pointer rounded-lg p-2 text-slate-600 transition-colors duration-200 hover:bg-slate-100 lg:hidden dark:text-slate-300 dark:hover:bg-white/10"
         >
           <IconClose className="h-5 w-5" />
         </button>
@@ -152,24 +173,35 @@ function Sidebar({
       <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label="Principal">
         {grupos.map((grupo) => (
           <div key={grupo.titulo} className="mb-6">
-            <p className="px-3 pb-2 text-[11px] font-semibold tracking-wider text-slate-500 uppercase dark:text-slate-400">
+            <p className="px-3 pb-2 text-[10px] font-semibold tracking-[0.12em] text-slate-400 uppercase dark:text-slate-500">
               {grupo.titulo}
             </p>
             <ul className="flex flex-col gap-0.5">
               {grupo.items.map((item) => {
                 const activo = item.href === pathname;
-                const clases = `flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none ${
-                  activo
-                    ? "bg-blue-50 font-semibold text-blue-800 dark:bg-blue-500/15 dark:text-blue-300"
-                    : "text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10"
-                }`;
+                // Los módulos sin ruta aún no existen: deben verse apagados y
+                // no idénticos a los que sí navegan.
+                const estado = activo
+                  ? "bg-blue-50 font-medium text-blue-800 dark:bg-blue-500/15 dark:text-blue-300"
+                  : item.href
+                    ? "text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10"
+                    : "cursor-default text-slate-400 dark:text-slate-600";
+                const clases = `flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none ${
+                  item.href ? "cursor-pointer" : ""
+                } ${estado}`;
 
                 const contenido = (
                   <>
                     <item.Icono className="h-5 w-5 shrink-0" />
                     <span className="flex-1 text-left">{item.etiqueta}</span>
                     {item.contador ? (
-                      <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-700 dark:bg-white/10 dark:text-slate-200">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${
+                          item.href
+                            ? "bg-slate-200 text-slate-700 dark:bg-white/10 dark:text-slate-200"
+                            : "bg-slate-100 text-slate-400 dark:bg-white/5 dark:text-slate-600"
+                        }`}
+                      >
                         {item.contador}
                       </span>
                     ) : null}
@@ -231,7 +263,7 @@ function TopBar({
         type="button"
         onClick={onAbrirMenu}
         aria-label="Abrir menú"
-        className="cursor-pointer rounded-lg p-2 text-slate-700 transition-colors duration-200 hover:bg-slate-100 lg:hidden dark:text-slate-200 dark:hover:bg-white/10"
+        className="cursor-pointer rounded-lg p-2 text-slate-700 transition-colors duration-200 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none lg:hidden dark:text-slate-200 dark:hover:bg-white/10"
       >
         <IconMenu className="h-5 w-5" />
       </button>
@@ -245,7 +277,7 @@ function TopBar({
           id="buscador"
           type="search"
           placeholder="Buscar clientes, oportunidades, casos…"
-          className="w-full max-w-md rounded-lg border border-slate-200 bg-slate-50 py-2 pr-3 pl-9 text-sm text-slate-900 transition-colors duration-200 outline-none placeholder:text-slate-500 focus:border-blue-600 focus:bg-white dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:border-blue-400"
+          className="w-full max-w-md rounded-lg border border-slate-200 bg-slate-50 py-2 pr-3 pl-9 text-sm text-slate-900 transition-colors duration-200 outline-none placeholder:text-slate-500 focus:border-blue-600 focus:bg-white focus:ring-2 focus:ring-blue-600/20 dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:border-blue-400"
         />
       </div>
 
@@ -253,7 +285,7 @@ function TopBar({
         <button
           type="button"
           title="Próximamente"
-          className="hidden cursor-pointer items-center gap-2 rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white transition-colors duration-200 hover:bg-blue-800 sm:flex dark:bg-blue-600 dark:hover:bg-blue-500"
+          className="hidden cursor-pointer items-center gap-2 rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white transition-colors duration-200 hover:bg-blue-800 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none sm:flex dark:bg-blue-600 dark:hover:bg-blue-500"
         >
           <IconPlus className="h-4 w-4" />
           Nuevo
@@ -263,7 +295,7 @@ function TopBar({
           type="button"
           aria-label="Notificaciones (3 sin leer)"
           title="Próximamente"
-          className="relative cursor-pointer rounded-lg p-2 text-slate-700 transition-colors duration-200 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10"
+          className="relative cursor-pointer rounded-lg p-2 text-slate-700 transition-colors duration-200 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none dark:text-slate-200 dark:hover:bg-white/10"
         >
           <IconBell className="h-5 w-5" />
           <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-slate-900" />

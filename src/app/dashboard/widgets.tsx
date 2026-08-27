@@ -56,7 +56,7 @@ function TarjetaKpi({ kpi }: { kpi: Kpi }) {
     <article className={`${card} p-5`}>
       <p className="text-sm text-slate-600 dark:text-slate-400">{kpi.titulo}</p>
       <div className="mt-2 flex items-end justify-between gap-3">
-        <p className="text-2xl font-bold tracking-tight tabular-nums">
+        <p className="text-2xl font-semibold tracking-tight tabular-nums">
           {kpi.valor}
         </p>
         <Sparkline serie={kpi.serie} positivo={bueno} />

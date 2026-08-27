@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { listarContactos, listarCultivos, obtenerCliente } from "@/lib/clientes";
-import { hoyEnBogota, listarCasosPendientes, listarVisitas } from "@/lib/crm";
+import { listarCasosPendientes } from "@/lib/casos";
+import { hoyEnBogota, listarVisitas } from "@/lib/crm";
+import { formatearFecha } from "@/lib/fechas";
 import { getSession } from "@/lib/session";
 import {
   IconChevronLeft,
@@ -12,7 +14,7 @@ import {
   IconPlus,
 } from "../../icons";
 import { Shell } from "../../shell";
-import { Estado, formatearFecha } from "../lista";
+import { Estado } from "../lista";
 
 export const dynamic = "force-dynamic";
 
@@ -93,7 +95,7 @@ export default async function FichaClientePage({
           <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
+                <h1 className="text-2xl font-semibold tracking-tight">
                   {cliente.nombre}
                 </h1>
                 <Estado activo={cliente.activo} />
@@ -412,7 +414,7 @@ function Metrica({
     <article className={`${card} p-5`}>
       <p className="text-sm text-slate-600 dark:text-slate-400">{titulo}</p>
       <p
-        className={`mt-2 text-2xl font-bold tracking-tight tabular-nums ${
+        className={`mt-2 text-2xl font-semibold tracking-tight tabular-nums ${
           alerta ? "text-red-700 dark:text-red-300" : ""
         }`}
       >

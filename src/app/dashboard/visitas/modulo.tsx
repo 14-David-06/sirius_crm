@@ -4,7 +4,9 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import type { ClienteCore } from "@/lib/clientes";
-import type { CasoPendiente, ProductoCore, Visita } from "@/lib/crm";
+import type { Caso } from "@/lib/casos";
+import type { Visita } from "@/lib/crm";
+import type { Producto } from "@/lib/productos";
 import { RESULTADOS_VISITA, TIPOS_VISITA } from "@/lib/crm";
 import {
   IconCalendar,
@@ -39,9 +41,9 @@ const DIAS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
 type Props = {
   visitas: Visita[];
-  casos: CasoPendiente[];
+  casos: Caso[];
   clientes: ClienteCore[];
-  productos: ProductoCore[];
+  productos: Producto[];
   personal: { nombre: string; rol: string | null }[];
   usuario: string;
   hoy: string;
@@ -71,7 +73,7 @@ export function ModuloVisitas({
     <div className="mx-auto flex max-w-[100rem] flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
+          <h1 className="text-2xl font-semibold tracking-tight">
             Visitas
           </h1>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
@@ -159,7 +161,7 @@ function Resumen({
   return (
     <article className={`${card} p-5`}>
       <p className="text-sm text-slate-600 dark:text-slate-400">{titulo}</p>
-      <p className={`mt-2 text-2xl font-bold tabular-nums ${color}`}>{valor}</p>
+      <p className={`mt-2 text-2xl font-semibold tracking-tight tabular-nums ${color}`}>{valor}</p>
     </article>
   );
 }
@@ -396,7 +398,7 @@ function Calendario({
   hoy,
 }: {
   visitas: Visita[];
-  casos: CasoPendiente[];
+  casos: Caso[];
   hoy: string;
 }) {
   const [ancla, setAncla] = useState(() => hoy.slice(0, 7)); // YYYY-MM

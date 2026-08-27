@@ -1,4 +1,5 @@
-import { hoyEnBogota, listarCasosPendientes, listarVisitas } from "@/lib/crm";
+import { listarCasosPendientes } from "@/lib/casos";
+import { hoyEnBogota, listarVisitas } from "@/lib/crm";
 
 /**
  * Agenda del home: reúne en una sola lista los compromisos con fecha que hoy

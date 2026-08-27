@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { LogoSirius } from "../logo";
 
 type Paso = "cedula" | "password" | "crear-password";
 
@@ -116,8 +117,11 @@ export default function LoginPage() {
     <div className="flex min-h-full flex-col">
       <header className="border-b border-black/10 dark:border-white/15">
         <nav className="mx-auto flex max-w-5xl items-center px-6 py-4">
-          <Link href="/" className="text-lg font-semibold tracking-tight">
-            Sirius <span className="text-blue-600 dark:text-blue-400">CRM</span>
+          <Link
+            href="/"
+            className="flex items-center rounded-md focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none"
+          >
+            <LogoSirius />
           </Link>
         </nav>
       </header>
@@ -126,7 +130,7 @@ export default function LoginPage() {
         <div className="w-full max-w-sm">
           {paso === "cedula" ? (
             <>
-              <h1 className="text-2xl font-bold tracking-tight">
+              <h1 className="text-2xl font-semibold tracking-tight">
                 Iniciar sesión
               </h1>
               <p className="mt-2 text-sm text-black/60 dark:text-white/60">
@@ -164,7 +168,7 @@ export default function LoginPage() {
 
           {paso === "password" ? (
             <>
-              <h1 className="text-2xl font-bold tracking-tight">
+              <h1 className="text-2xl font-semibold tracking-tight">
                 Hola, {primerNombre(nombre)}
               </h1>
               <p className="mt-2 text-sm text-black/60 dark:text-white/60">
@@ -203,7 +207,7 @@ export default function LoginPage() {
 
           {paso === "crear-password" ? (
             <>
-              <h1 className="text-2xl font-bold tracking-tight">
+              <h1 className="text-2xl font-semibold tracking-tight">
                 Crea tu contraseña
               </h1>
               <p className="mt-2 text-sm text-black/60 dark:text-white/60">

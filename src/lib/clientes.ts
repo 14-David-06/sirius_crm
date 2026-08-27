@@ -1,4 +1,10 @@
-import { listarRegistros, texto, type AirtableRecord } from "@/lib/airtable";
+import {
+  actualizarRegistro,
+  crearRegistro,
+  listarRegistros,
+  texto,
+  type AirtableRecord,
+} from "@/lib/airtable";
 import { env } from "@/lib/env";
 
 /**
@@ -63,6 +69,7 @@ export type ContactoCliente = {
   codigo: string | null;
   nombre: string;
   cargo: string | null;
+  cedula: string | null;
   email: string | null;
   emailNotificacion: string | null;
   telefono: string | null;
@@ -159,22 +166,85 @@ export async function listarContactos(): Promise<ContactoCliente[]> {
   );
 
   return registros
-    .map((registro) => {
-      const f = registro.fields;
-      return {
-        recordId: registro.id,
-        codigo: texto(f[CAMPOS_CONTACTO.codigo]),
-        nombre: texto(f[CAMPOS_CONTACTO.nombre]) ?? "",
-        cargo: texto(f[CAMPOS_CONTACTO.cargo]),
-        email: texto(f[CAMPOS_CONTACTO.email]),
-        emailNotificacion: texto(f[CAMPOS_CONTACTO.emailNotificacion]),
-        telefono: texto(f[CAMPOS_CONTACTO.telefono]),
-        activo: texto(f[CAMPOS_CONTACTO.estado]) !== "Inactivo",
-        clientes: vinculos(f[CAMPOS_CONTACTO.cliente]),
-      };
-    })
+    .map(aContacto)
     .filter((contacto) => contacto.nombre)
     .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+}
+
+export type EntradaContacto = {
+  nombre: string;
+  cliente: string;
+  cargo?: string;
+  cedula?: string;
+  email?: string;
+  emailNotificacion?: string;
+  telefono?: string;
+};
+
+function aContacto(registro: AirtableRecord): ContactoCliente {
+  const f = registro.fields;
+  return {
+    recordId: registro.id,
+    codigo: texto(f[CAMPOS_CONTACTO.codigo]),
+    nombre: texto(f[CAMPOS_CONTACTO.nombre]) ?? "",
+    cargo: texto(f[CAMPOS_CONTACTO.cargo]),
+    cedula: texto(f[CAMPOS_CONTACTO.cedula]),
+    email: texto(f[CAMPOS_CONTACTO.email]),
+    emailNotificacion: texto(f[CAMPOS_CONTACTO.emailNotificacion]),
+    telefono: texto(f[CAMPOS_CONTACTO.telefono]),
+    activo: texto(f[CAMPOS_CONTACTO.estado]) !== "Inactivo",
+    clientes: vinculos(f[CAMPOS_CONTACTO.cliente]),
+  };
+}
+
+export async function crearContacto(
+  entrada: EntradaContacto,
+): Promise<ContactoCliente> {
+  const registro = await crearRegistro(
+    env.baseClientes,
+    env.tablaPersonalCliente,
+    {
+      [CAMPOS_CONTACTO.nombre]: entrada.nombre,
+      [CAMPOS_CONTACTO.cliente]: [entrada.cliente],
+      [CAMPOS_CONTACTO.cargo]: entrada.cargo ?? "",
+      [CAMPOS_CONTACTO.cedula]: entrada.cedula ?? "",
+      [CAMPOS_CONTACTO.email]: entrada.email ?? "",
+      [CAMPOS_CONTACTO.emailNotificacion]: entrada.emailNotificacion ?? "",
+      [CAMPOS_CONTACTO.telefono]: entrada.telefono ?? "",
+      [CAMPOS_CONTACTO.estado]: "Activo",
+    },
+  );
+  return aContacto(registro);
+}
+
+/** Corrige los datos de localización, que son los que cambian con el tiempo. */
+export async function actualizarDatosContacto(
+  recordId: string,
+  datos: { email: string | null; telefono: string | null },
+): Promise<ContactoCliente> {
+  const registro = await actualizarRegistro(
+    env.baseClientes,
+    env.tablaPersonalCliente,
+    recordId,
+    {
+      [CAMPOS_CONTACTO.email]: datos.email ?? "",
+      [CAMPOS_CONTACTO.telefono]: datos.telefono ?? "",
+    },
+  );
+  return aContacto(registro);
+}
+
+export async function cambiarEstadoContacto(
+  recordId: string,
+  activo: boolean,
+): Promise<ContactoCliente> {
+  const registro = await actualizarRegistro(
+    env.baseClientes,
+    env.tablaPersonalCliente,
+    recordId,
+    { [CAMPOS_CONTACTO.estado]: activo ? "Activo" : "Inactivo" },
+  );
+  return aContacto(registro);
 }
 
 export async function listarCultivos(): Promise<CultivoCliente[]> {

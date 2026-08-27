@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { formatearFecha } from "@/lib/fechas";
 import { IconFilter, IconSearch } from "../icons";
 
 const card =
@@ -66,7 +67,7 @@ export function ListaClientes({ filas }: { filas: FilaCliente[] }) {
     <div className="mx-auto flex max-w-[100rem] flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
+          <h1 className="text-2xl font-semibold tracking-tight">
             Clientes
           </h1>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
@@ -225,25 +226,3 @@ export function Estado({ activo }: { activo: boolean }) {
   );
 }
 
-const MESES = [
-  "ene",
-  "feb",
-  "mar",
-  "abr",
-  "may",
-  "jun",
-  "jul",
-  "ago",
-  "sep",
-  "oct",
-  "nov",
-  "dic",
-];
-
-/** Las fechas llegan como YYYY-MM-DD; se formatean sin pasar por Date. */
-export function formatearFecha(fecha: string | null): string {
-  if (!fecha) return "—";
-  const [anio, mes, dia] = fecha.slice(0, 10).split("-").map(Number);
-  if (!anio || !mes || !dia) return fecha;
-  return `${dia} ${MESES[mes - 1]} ${anio}`;
-}

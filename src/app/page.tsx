@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import fondoNoche from "../../public/fondo-noche.png";
+import { LogoSirius } from "./logo";
 
 const features = [
   {
@@ -75,9 +76,8 @@ export default function Home() {
 
       <header className="sticky top-0 z-20 border-b border-white/10 bg-[#0b0a0d]/50 backdrop-blur-xl">
         <nav className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <span className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-            <span className="inline-block size-2 rounded-full bg-amber-300 shadow-[0_0_12px_3px_rgba(252,211,77,0.6)]" />
-            Sirius <span className="text-amber-300">CRM</span>
+          <span className="flex items-center">
+            <LogoSirius variante="claro" />
           </span>
           <div className="flex items-center gap-1 sm:gap-2">
             <Link
