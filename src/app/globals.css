@@ -24,3 +24,48 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
+
+@keyframes aparecer {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility animate-aparecer {
+  animation-name: aparecer;
+  animation-duration: 0.7s;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-fill-mode: both;
+}
+
+@utility animate-retraso-1 {
+  animation-delay: 0.08s;
+}
+
+@utility animate-retraso-2 {
+  animation-delay: 0.16s;
+}
+
+@utility animate-retraso-3 {
+  animation-delay: 0.24s;
+}
+
+@utility animate-retraso-4 {
+  animation-delay: 0.32s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
