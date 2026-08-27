@@ -1,28 +1,20 @@
-"use client";
+import Link from "next/link";
 
-import { useState } from "react";
-
-import {
-  actividades,
-  casos,
-  embudo,
-  equipo,
-  kpis,
-  pipeline,
-  seguimientos,
-  tareas as tareasIniciales,
-  topClientes,
-  ventasMensuales,
-  type Kpi,
-} from "./data";
+import type { Caso } from "@/lib/casos";
+import { formatearFecha } from "@/lib/fechas";
+import type {
+  ClienteActivo,
+  FilaSeguimiento,
+  ItemActividad,
+  KpiInicio,
+  PersonaEquipo,
+  PuntoMes,
+  ResultadoVisitas,
+} from "@/lib/inicio";
 import {
   IconArrowDown,
   IconArrowUp,
-  IconCalendar,
-  IconDots,
-  IconFilter,
   IconMail,
-  IconNote,
   IconPhone,
   IconRoute,
 } from "./icons";
@@ -32,7 +24,7 @@ const card =
 
 /* ------------------------------- KPIs ---------------------------------- */
 
-export function FilaKpis() {
+export function FilaKpis({ kpis }: { kpis: KpiInicio[] }) {
   return (
     <section aria-labelledby="kpis-titulo">
       <h2 id="kpis-titulo" className="sr-only">
@@ -47,10 +39,10 @@ export function FilaKpis() {
   );
 }
 
-function TarjetaKpi({ kpi }: { kpi: Kpi }) {
-  const positivo = kpi.delta >= 0;
-  // En "Casos abiertos" bajar es bueno: el color sigue el significado, no el signo.
-  const bueno = kpi.id === "casos" ? !positivo : positivo;
+function TarjetaKpi({ kpi }: { kpi: KpiInicio }) {
+  const subio = kpi.delta !== null && kpi.delta >= 0;
+  // El color sigue el significado, no el signo: en casos, bajar es bueno.
+  const bueno = kpi.bajarEsBueno ? !subio : subio;
 
   return (
     <article className={`${card} p-5`}>
@@ -59,23 +51,28 @@ function TarjetaKpi({ kpi }: { kpi: Kpi }) {
         <p className="text-2xl font-semibold tracking-tight tabular-nums">
           {kpi.valor}
         </p>
-        <Sparkline serie={kpi.serie} positivo={bueno} />
+        {kpi.serie.length > 1 ? (
+          <Sparkline serie={kpi.serie} tono={kpi.delta === null ? null : bueno} />
+        ) : null}
       </div>
       <div className="mt-3 flex items-center gap-2 text-xs">
-        <span
-          className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-semibold ${
-            bueno
-              ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300"
-              : "bg-red-50 text-red-800 dark:bg-red-500/15 dark:text-red-300"
-          }`}
-        >
-          {positivo ? (
-            <IconArrowUp className="h-3 w-3" />
-          ) : (
-            <IconArrowDown className="h-3 w-3" />
-          )}
-          {Math.abs(kpi.delta).toFixed(1)} %
-        </span>
+        {/* Sin periodo anterior no se inventa una variación. */}
+        {kpi.delta === null ? null : (
+          <span
+            className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-semibold ${
+              bueno
+                ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300"
+                : "bg-red-50 text-red-800 dark:bg-red-500/15 dark:text-red-300"
+            }`}
+          >
+            {subio ? (
+              <IconArrowUp className="h-3 w-3" />
+            ) : (
+              <IconArrowDown className="h-3 w-3" />
+            )}
+            {Math.abs(kpi.delta).toFixed(0)} %
+          </span>
+        )}
         <span className="text-slate-600 dark:text-slate-400">
           {kpi.detalle}
         </span>
@@ -86,10 +83,11 @@ function TarjetaKpi({ kpi }: { kpi: Kpi }) {
 
 function Sparkline({
   serie,
-  positivo,
+  tono,
 }: {
   serie: number[];
-  positivo: boolean;
+  /** null cuando no hay variación con la que juzgar si va bien o mal. */
+  tono: boolean | null;
 }) {
   const max = Math.max(...serie);
   const min = Math.min(...serie);
@@ -116,216 +114,130 @@ function Sparkline({
         strokeLinecap="round"
         strokeLinejoin="round"
         className={
-          positivo
-            ? "stroke-emerald-500"
-            : "stroke-red-500 dark:stroke-red-400"
+          tono === null
+            ? "stroke-slate-400 dark:stroke-slate-500"
+            : tono
+              ? "stroke-emerald-500"
+              : "stroke-red-500 dark:stroke-red-400"
         }
       />
     </svg>
   );
 }
 
-/* ------------------------------ Pipeline -------------------------------- */
+/* --------------------------- Visitas por mes ---------------------------- */
 
-export function Pipeline() {
+export function GraficoVisitas({ puntos }: { puntos: PuntoMes[] }) {
+  const max = Math.max(...puntos.map((p) => p.visitas), 1);
+  const total = puntos.reduce((suma, p) => suma + p.visitas, 0);
+
   return (
-    <section aria-labelledby="pipeline-titulo" className={`${card} p-5`}>
+    <section aria-labelledby="visitas-titulo" className={`${card} p-5`}>
       <EncabezadoPanel
-        id="pipeline-titulo"
-        titulo="Pipeline comercial"
-        detalle="38 oportunidades · $1.120 M"
-        accion="Ver tablero"
+        id="visitas-titulo"
+        titulo="Visitas por mes"
+        detalle="Últimos 12 meses"
+        enlace={{ href: "/dashboard/visitas", texto: "Ver visitas" }}
       />
 
-      <div className="-mx-5 mt-4 overflow-x-auto px-5 pb-2">
-        <div className="flex min-w-max gap-4">
-          {pipeline.map((etapa) => (
-            <div key={etapa.id} className="w-64 shrink-0">
-              <div className="flex items-center justify-between gap-2 pb-3">
-                <div className="flex items-center gap-2">
-                  <span
-                    aria-hidden="true"
-                    className={`h-2.5 w-2.5 rounded-full ${etapa.color}`}
+      {total === 0 ? (
+        <Vacio texto="Todavía no hay visitas registradas en este periodo." />
+      ) : (
+        <>
+          <div className="mt-6 flex items-end gap-1.5 sm:gap-2.5">
+            {puntos.map((punto) => (
+              <div
+                key={punto.mes}
+                className="group flex flex-1 flex-col items-center gap-2"
+              >
+                <div className="relative flex h-40 w-full items-end justify-center">
+                  {punto.visitas > 0 ? (
+                    <span className="absolute -top-5 text-[11px] font-semibold text-slate-600 tabular-nums opacity-0 transition-opacity group-hover:opacity-100 dark:text-slate-300">
+                      {punto.visitas}
+                    </span>
+                  ) : null}
+                  <div
+                    className="w-full max-w-8 rounded-t bg-blue-700 transition-colors duration-200 group-hover:bg-blue-600 dark:bg-blue-500 dark:group-hover:bg-blue-400"
+                    style={{
+                      // Las barras en cero se dejan como una línea visible.
+                      height: `${Math.max((punto.visitas / max) * 100, punto.visitas > 0 ? 4 : 1)}%`,
+                    }}
                   />
-                  <span className="text-sm font-semibold">{etapa.nombre}</span>
                 </div>
-                <span className="text-xs text-slate-600 tabular-nums dark:text-slate-400">
-                  {etapa.monto}
+                <span className="text-[11px] text-slate-600 dark:text-slate-400">
+                  {punto.etiqueta}
                 </span>
               </div>
+            ))}
+          </div>
 
-              <ul className="flex flex-col gap-2">
-                {etapa.oportunidades.map((oportunidad) => (
-                  <li key={oportunidad.id}>
-                    <article
-                      tabIndex={0}
-                      className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 p-3 transition-colors duration-200 hover:border-blue-400 hover:bg-white focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none dark:border-white/10 dark:bg-white/5 dark:hover:border-blue-400/60 dark:hover:bg-white/10"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-sm font-semibold">
-                          {oportunidad.cliente}
-                        </p>
-                        <span
-                          aria-hidden="true"
-                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[10px] font-semibold text-slate-700 dark:bg-white/10 dark:text-slate-200"
-                        >
-                          {oportunidad.responsable}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-                        {oportunidad.producto}
-                      </p>
-                      <div className="mt-3 flex items-center justify-between gap-2">
-                        <span className="text-sm font-semibold tabular-nums">
-                          {oportunidad.monto}
-                        </span>
-                        <span className="text-[11px] text-slate-600 dark:text-slate-400">
-                          {oportunidad.probabilidad} % · {oportunidad.dias} d
-                        </span>
-                      </div>
-                      <div
-                        className="mt-2 h-1 rounded-full bg-slate-200 dark:bg-white/10"
-                        role="presentation"
-                      >
-                        <div
-                          className="h-1 rounded-full bg-blue-700 dark:bg-blue-400"
-                          style={{ width: `${oportunidad.probabilidad}%` }}
-                        />
-                      </div>
-                    </article>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      </div>
+          {/* Alternativa accesible al gráfico */}
+          <table className="sr-only">
+            <caption>Visitas registradas por mes</caption>
+            <thead>
+              <tr>
+                <th scope="col">Mes</th>
+                <th scope="col">Visitas</th>
+              </tr>
+            </thead>
+            <tbody>
+              {puntos.map((punto) => (
+                <tr key={punto.mes}>
+                  <th scope="row">{punto.mes}</th>
+                  <td>{punto.visitas}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
     </section>
   );
 }
 
-/* ------------------------------- Gráficos ------------------------------- */
+/* -------------------------- Resultado de visitas ------------------------ */
 
-export function GraficoVentas() {
-  const max = Math.max(...ventasMensuales.map((p) => Math.max(p.ventas, p.meta)));
-
-  return (
-    <section aria-labelledby="ventas-titulo" className={`${card} p-5`}>
-      <EncabezadoPanel
-        id="ventas-titulo"
-        titulo="Ventas vs. meta"
-        detalle="Últimos 12 meses · millones COP"
-        accion="Exportar"
-      />
-
-      <div className="mt-6 flex items-end gap-1.5 sm:gap-2.5">
-        {ventasMensuales.map((punto) => {
-          const alto = (punto.ventas / max) * 100;
-          const altoMeta = (punto.meta / max) * 100;
-          const cumple = punto.ventas >= punto.meta;
-
-          return (
-            <div
-              key={punto.mes}
-              className="group flex flex-1 flex-col items-center gap-2"
-            >
-              <div className="relative flex h-40 w-full items-end justify-center">
-                <div
-                  aria-hidden="true"
-                  className="absolute right-0 left-0 border-t border-dashed border-slate-400 dark:border-slate-500"
-                  style={{ bottom: `${altoMeta}%` }}
-                />
-                <div
-                  className={`w-full max-w-8 rounded-t transition-colors duration-200 ${
-                    cumple
-                      ? "bg-blue-700 group-hover:bg-blue-600 dark:bg-blue-500 dark:group-hover:bg-blue-400"
-                      : "bg-slate-300 group-hover:bg-slate-400 dark:bg-slate-600 dark:group-hover:bg-slate-500"
-                  }`}
-                  style={{ height: `${alto}%` }}
-                />
-              </div>
-              <span className="text-[11px] text-slate-600 dark:text-slate-400">
-                {punto.mes}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-slate-600 dark:text-slate-400">
-        <Leyenda color="bg-blue-700 dark:bg-blue-500" texto="Cumple meta" />
-        <Leyenda color="bg-slate-300 dark:bg-slate-600" texto="Bajo meta" />
-        <span className="flex items-center gap-1.5">
-          <span
-            aria-hidden="true"
-            className="h-0 w-4 border-t border-dashed border-slate-400 dark:border-slate-500"
-          />
-          Meta mensual
-        </span>
-      </div>
-
-      {/* Alternativa accesible al gráfico */}
-      <table className="sr-only">
-        <caption>Ventas mensuales contra la meta, en millones de pesos</caption>
-        <thead>
-          <tr>
-            <th scope="col">Mes</th>
-            <th scope="col">Ventas</th>
-            <th scope="col">Meta</th>
-          </tr>
-        </thead>
-        <tbody>
-          {ventasMensuales.map((punto) => (
-            <tr key={punto.mes}>
-              <th scope="row">{punto.mes}</th>
-              <td>{punto.ventas}</td>
-              <td>{punto.meta}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </section>
-  );
-}
-
-export function Embudo() {
-  const maximo = embudo[0].cantidad;
+export function ResultadoDeVisitas({
+  resultados,
+}: {
+  resultados: ResultadoVisitas[];
+}) {
+  const maximo = Math.max(...resultados.map((r) => r.cantidad), 1);
+  const total = resultados.reduce((suma, r) => suma + r.cantidad, 0);
 
   return (
-    <section aria-labelledby="embudo-titulo" className={`${card} p-5`}>
+    <section aria-labelledby="resultados-titulo" className={`${card} p-5`}>
       <EncabezadoPanel
-        id="embudo-titulo"
-        titulo="Embudo de conversión"
-        detalle="Trimestre actual"
+        id="resultados-titulo"
+        titulo="Resultado de las visitas"
+        detalle={
+          total === 0 ? "sin datos" : `${total} visitas con resultado anotado`
+        }
       />
 
-      <ul className="mt-5 flex flex-col gap-3">
-        {embudo.map((paso, indice) => {
-          const ancho = (paso.cantidad / maximo) * 100;
-          const anterior = indice === 0 ? null : embudo[indice - 1].cantidad;
-          const tasa = anterior
-            ? Math.round((paso.cantidad / anterior) * 100)
-            : 100;
-
-          return (
-            <li key={paso.etapa}>
-              <div className="flex items-center justify-between gap-2 text-sm">
-                <span className="font-medium">{paso.etapa}</span>
-                <span className="text-slate-600 tabular-nums dark:text-slate-400">
-                  {paso.cantidad}
-                  {indice > 0 ? ` · ${tasa} %` : ""}
+      {resultados.length === 0 ? (
+        <Vacio texto="Ninguna visita tiene resultado anotado todavía." />
+      ) : (
+        <ul className="mt-5 flex flex-col gap-3">
+          {resultados.map((paso) => (
+            <li key={paso.resultado}>
+              <div className="flex items-start justify-between gap-2 text-sm">
+                <span className="min-w-0 font-medium">{paso.resultado}</span>
+                <span className="shrink-0 text-slate-600 tabular-nums dark:text-slate-400">
+                  {paso.cantidad} · {Math.round((paso.cantidad / total) * 100)}{" "}
+                  %
                 </span>
               </div>
               <div className="mt-1.5 h-2.5 rounded-full bg-slate-100 dark:bg-white/10">
                 <div
                   className="h-2.5 rounded-full bg-blue-700 dark:bg-blue-500"
-                  style={{ width: `${ancho}%` }}
+                  style={{ width: `${(paso.cantidad / maximo) * 100}%` }}
                 />
               </div>
             </li>
-          );
-        })}
-      </ul>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
@@ -333,328 +245,307 @@ export function Embudo() {
 /* ------------------------- Tabla de seguimientos ------------------------ */
 
 const colorEstado: Record<string, string> = {
-  "A tiempo":
+  Programado:
     "bg-emerald-50 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300",
-  "En riesgo":
-    "bg-amber-50 text-amber-900 dark:bg-amber-500/15 dark:text-amber-300",
-  Vencido: "bg-red-50 text-red-800 dark:bg-red-500/15 dark:text-red-300",
+  Hoy: "bg-amber-50 text-amber-900 dark:bg-amber-500/15 dark:text-amber-300",
+  Atrasado: "bg-red-50 text-red-800 dark:bg-red-500/15 dark:text-red-300",
 };
 
-export function TablaSeguimientos() {
+export function TablaSeguimientos({ filas }: { filas: FilaSeguimiento[] }) {
   return (
     <section aria-labelledby="seguimientos-titulo" className={`${card} p-5`}>
       <EncabezadoPanel
         id="seguimientos-titulo"
         titulo="Próximos seguimientos"
-        detalle="Visitas y compromisos pactados"
-        accion="Filtrar"
-        Icono={IconFilter}
+        detalle="Compromisos pactados en visitas"
+        enlace={{ href: "/dashboard/visitas", texto: "Ver todos" }}
       />
 
-      <div className="-mx-5 mt-4 overflow-x-auto">
-        <table className="w-full min-w-[46rem] text-sm">
-          <thead>
-            <tr className="border-y border-slate-200 text-left text-xs tracking-wide text-slate-600 uppercase dark:border-white/10 dark:text-slate-400">
-              <th scope="col" className="px-5 py-2.5 font-semibold">
-                ID
-              </th>
-              <th scope="col" className="px-5 py-2.5 font-semibold">
-                Cliente
-              </th>
-              <th scope="col" className="px-5 py-2.5 font-semibold">
-                Contacto
-              </th>
-              <th scope="col" className="px-5 py-2.5 font-semibold">
-                Tipo
-              </th>
-              <th scope="col" className="px-5 py-2.5 font-semibold">
-                Responsable
-              </th>
-              <th scope="col" className="px-5 py-2.5 font-semibold">
-                Fecha
-              </th>
-              <th scope="col" className="px-5 py-2.5 font-semibold">
-                Estado
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-            {seguimientos.map((fila) => (
-              <tr
-                key={fila.id}
-                className="cursor-pointer transition-colors duration-200 hover:bg-slate-50 dark:hover:bg-white/5"
-              >
-                <td className="px-5 py-3 font-mono text-xs text-slate-600 dark:text-slate-400">
-                  {fila.id}
-                </td>
-                <td className="px-5 py-3 font-medium">{fila.cliente}</td>
-                <td className="px-5 py-3 text-slate-600 dark:text-slate-400">
-                  {fila.contacto}
-                </td>
-                <td className="px-5 py-3 text-slate-600 dark:text-slate-400">
-                  {fila.tipo}
-                </td>
-                <td className="px-5 py-3 text-slate-600 dark:text-slate-400">
-                  {fila.responsable}
-                </td>
-                <td className="px-5 py-3 whitespace-nowrap tabular-nums">
-                  {fila.fecha}
-                </td>
-                <td className="px-5 py-3">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${colorEstado[fila.estado]}`}
-                  >
-                    {fila.estado}
-                  </span>
-                </td>
+      {filas.length === 0 ? (
+        <Vacio texto="No hay compromisos de seguimiento pendientes." />
+      ) : (
+        <div className="-mx-5 mt-4 overflow-x-auto">
+          <table className="w-full min-w-[46rem] text-sm">
+            <thead>
+              <tr className="border-y border-slate-200 text-left text-xs tracking-wide text-slate-600 uppercase dark:border-white/10 dark:text-slate-400">
+                {["Visita", "Cliente", "Próxima acción", "Responsable", "Fecha", "Estado"].map(
+                  (columna) => (
+                    <th
+                      key={columna}
+                      scope="col"
+                      className="px-5 py-2.5 font-semibold whitespace-nowrap"
+                    >
+                      {columna}
+                    </th>
+                  ),
+                )}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
-/* -------------------------------- Tareas -------------------------------- */
-
-const colorPrioridad: Record<string, string> = {
-  alta: "bg-red-500",
-  media: "bg-amber-500",
-  baja: "bg-slate-400",
-};
-
-export function Tareas() {
-  const [tareas, setTareas] = useState(tareasIniciales);
-  const pendientes = tareas.filter((t) => !t.hecha).length;
-
-  function alternar(id: string) {
-    setTareas((previas) =>
-      previas.map((tarea) =>
-        tarea.id === id ? { ...tarea, hecha: !tarea.hecha } : tarea,
-      ),
-    );
-  }
-
-  return (
-    <section aria-labelledby="tareas-titulo" className={`${card} p-5`}>
-      <EncabezadoPanel
-        id="tareas-titulo"
-        titulo="Mis tareas de hoy"
-        detalle={`${pendientes} pendientes`}
-        accion="Ver todas"
-      />
-
-      <ul className="mt-4 flex flex-col gap-1">
-        {tareas.map((tarea) => (
-          <li key={tarea.id}>
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg p-2 transition-colors duration-200 hover:bg-slate-50 dark:hover:bg-white/5">
-              <input
-                type="checkbox"
-                checked={tarea.hecha}
-                onChange={() => alternar(tarea.id)}
-                className="mt-0.5 h-4 w-4 cursor-pointer accent-blue-700 dark:accent-blue-500"
-              />
-              <span className="min-w-0 flex-1">
-                <span
-                  className={`block text-sm ${
-                    tarea.hecha
-                      ? "text-slate-500 line-through dark:text-slate-500"
-                      : "font-medium"
-                  }`}
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+              {filas.map((fila) => (
+                <tr
+                  key={fila.recordId}
+                  className="transition-colors duration-200 hover:bg-slate-50 dark:hover:bg-white/5"
                 >
-                  {tarea.titulo}
-                </span>
-                <span className="mt-0.5 flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
-                  <span
-                    aria-hidden="true"
-                    className={`h-1.5 w-1.5 rounded-full ${colorPrioridad[tarea.prioridad]}`}
-                  />
-                  <span className="sr-only">
-                    Prioridad {tarea.prioridad}.
-                  </span>
-                  {tarea.cliente} · {tarea.hora}
-                </span>
-              </span>
-            </label>
-          </li>
-        ))}
-      </ul>
+                  <td className="px-5 py-3 font-mono text-xs whitespace-nowrap text-slate-600 dark:text-slate-400">
+                    {fila.id}
+                  </td>
+                  <td className="px-5 py-3 font-medium">{fila.cliente}</td>
+                  <td className="max-w-xs px-5 py-3 text-slate-600 dark:text-slate-400">
+                    {fila.accion}
+                  </td>
+                  <td className="px-5 py-3 text-slate-600 dark:text-slate-400">
+                    {fila.responsable ?? "—"}
+                  </td>
+                  <td className="px-5 py-3 whitespace-nowrap tabular-nums">
+                    {formatearFecha(fila.fecha)}
+                  </td>
+                  <td className="px-5 py-3">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${colorEstado[fila.estado]}`}
+                    >
+                      {fila.estado}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }
 
 /* ------------------------------ Actividad ------------------------------- */
 
-const iconoActividad = {
-  llamada: IconPhone,
-  correo: IconMail,
-  visita: IconRoute,
-  nota: IconNote,
-} as const;
+const iconoPorTipo: Record<
+  string,
+  (props: { className?: string }) => React.ReactElement
+> = {
+  Presencial: IconRoute,
+  Llamada: IconPhone,
+  Virtual: IconMail,
+};
 
-export function Actividad() {
+export function Actividad({ items }: { items: ItemActividad[] }) {
   return (
     <section aria-labelledby="actividad-titulo" className={`${card} p-5`}>
       <EncabezadoPanel
         id="actividad-titulo"
         titulo="Actividad reciente"
-        detalle="Equipo comercial"
+        detalle="Últimas visitas del equipo"
       />
 
-      <ol className="mt-4 flex flex-col">
-        {actividades.map((item, indice) => {
-          const Icono = iconoActividad[item.tipo];
-          const ultimo = indice === actividades.length - 1;
+      {items.length === 0 ? (
+        <Vacio texto="Todavía no hay visitas registradas." />
+      ) : (
+        <ol className="mt-4 flex flex-col">
+          {items.map((item, indice) => {
+            const Icono = iconoPorTipo[item.tipo ?? ""] ?? IconRoute;
+            const ultimo = indice === items.length - 1;
 
-          return (
-            <li key={item.id} className="flex gap-3">
-              <div className="flex flex-col items-center">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-200">
-                  <Icono className="h-4 w-4" />
-                </span>
-                {ultimo ? null : (
-                  <span
-                    aria-hidden="true"
-                    className="my-1 w-px flex-1 bg-slate-200 dark:bg-white/10"
-                  />
-                )}
-              </div>
-              <div className={ultimo ? "pb-0" : "pb-5"}>
-                <p className="text-sm font-medium">{item.titulo}</p>
-                <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
-                  {item.cliente} · {item.autor} · {item.cuando}
-                </p>
-              </div>
-            </li>
-          );
-        })}
-      </ol>
+            return (
+              <li key={item.id} className="flex gap-3">
+                <div className="flex flex-col items-center">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-200">
+                    <Icono className="h-4 w-4" />
+                  </span>
+                  {ultimo ? null : (
+                    <span
+                      aria-hidden="true"
+                      className="my-1 w-px flex-1 bg-slate-200 dark:bg-white/10"
+                    />
+                  )}
+                </div>
+                <div className={ultimo ? "pb-0" : "pb-5"}>
+                  <p className="text-sm font-medium">{item.titulo}</p>
+                  <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
+                    {item.cliente}
+                    {item.responsable ? ` · ${item.responsable}` : ""} ·{" "}
+                    {formatearFecha(item.fecha)}
+                  </p>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
     </section>
   );
 }
 
 /* -------------------------------- Casos --------------------------------- */
 
-const colorSla: Record<string, string> = {
-  "Dentro de SLA":
+const colorAlerta: Record<string, string> = {
+  "en-plazo":
     "bg-emerald-50 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300",
-  "Por vencer":
-    "bg-amber-50 text-amber-900 dark:bg-amber-500/15 dark:text-amber-300",
-  Vencido: "bg-red-50 text-red-800 dark:bg-red-500/15 dark:text-red-300",
+  hoy: "bg-amber-50 text-amber-900 dark:bg-amber-500/15 dark:text-amber-300",
+  vencido: "bg-red-50 text-red-800 dark:bg-red-500/15 dark:text-red-300",
+  "sin-plazo": "bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-300",
 };
 
-export function Casos() {
+const textoAlerta: Record<string, string> = {
+  "en-plazo": "En plazo",
+  hoy: "Vence hoy",
+  vencido: "Vencido",
+  "sin-plazo": "Sin plazo",
+};
+
+export function Casos({
+  casos,
+  abiertos,
+  vencidos,
+}: {
+  casos: Caso[];
+  abiertos: number;
+  vencidos: number;
+}) {
   return (
     <section aria-labelledby="casos-titulo" className={`${card} p-5`}>
       <EncabezadoPanel
         id="casos-titulo"
         titulo="Casos por atender"
-        detalle="17 abiertos · 4 fuera de SLA"
-        accion="Ver todos"
+        detalle={
+          abiertos === 0
+            ? "ninguno sin resolver"
+            : `${abiertos} sin resolver · ${vencidos} con plazo vencido`
+        }
+        enlace={{ href: "/dashboard/casos", texto: "Ver todos" }}
       />
 
-      <ul className="mt-4 flex flex-col gap-2">
-        {casos.map((caso) => (
-          <li key={caso.id}>
-            <article
-              tabIndex={0}
-              className="cursor-pointer rounded-lg border border-slate-200 p-3 transition-colors duration-200 hover:border-blue-400 hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none dark:border-white/10 dark:hover:border-blue-400/60 dark:hover:bg-white/5"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <p className="text-sm font-semibold">{caso.asunto}</p>
-                <span
-                  className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${colorSla[caso.sla]}`}
-                >
-                  {caso.sla}
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-                {caso.cliente} · {caso.tipo} · {caso.dias} d abierto
-              </p>
-            </article>
-          </li>
-        ))}
-      </ul>
+      {casos.length === 0 ? (
+        <Vacio texto="No hay casos sin resolver." />
+      ) : (
+        <ul className="mt-4 flex flex-col gap-2">
+          {casos.map((caso) => (
+            <li key={caso.recordId}>
+              <Link
+                href="/dashboard/casos"
+                className="block rounded-lg border border-slate-200 p-3 transition-colors duration-200 hover:border-blue-400 hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none dark:border-white/10 dark:hover:border-blue-400/60 dark:hover:bg-white/5"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-sm font-semibold">
+                    {caso.descripcion ?? caso.tipo ?? "Caso abierto"}
+                  </p>
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${colorAlerta[caso.alerta]}`}
+                  >
+                    {textoAlerta[caso.alerta]}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                  {caso.cliente}
+                  {caso.tipo ? ` · ${caso.tipo}` : ""}
+                  {caso.diasAbierto !== null
+                    ? ` · ${caso.diasAbierto} d abierto`
+                    : ""}
+                </p>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
 
 /* --------------------------- Clientes y equipo -------------------------- */
 
-export function TopClientes() {
+export function TopClientes({ clientes }: { clientes: ClienteActivo[] }) {
+  const maximo = Math.max(...clientes.map((c) => c.visitas), 1);
+
   return (
     <section aria-labelledby="clientes-titulo" className={`${card} p-5`}>
       <EncabezadoPanel
         id="clientes-titulo"
-        titulo="Clientes por facturación"
-        detalle="Año en curso"
+        titulo="Clientes más visitados"
+        detalle="Por visitas registradas"
+        enlace={{ href: "/dashboard/clientes", texto: "Ver clientes" }}
       />
 
-      <ul className="mt-4 flex flex-col gap-3">
-        {topClientes.map((cliente) => (
-          <li key={cliente.nombre}>
-            <div className="flex items-center justify-between gap-3 text-sm">
-              <span className="min-w-0 truncate font-medium">
-                {cliente.nombre}
-              </span>
-              <span className="shrink-0 tabular-nums">{cliente.monto}</span>
-            </div>
-            <div className="mt-1.5 flex items-center gap-2">
-              <div className="h-1.5 flex-1 rounded-full bg-slate-100 dark:bg-white/10">
-                <div
-                  className="h-1.5 rounded-full bg-amber-500"
-                  style={{ width: `${cliente.porcentaje}%` }}
-                />
+      {clientes.length === 0 ? (
+        <Vacio texto="Ningún cliente tiene visitas registradas." />
+      ) : (
+        <ul className="mt-4 flex flex-col gap-3">
+          {clientes.map((cliente) => (
+            <li key={cliente.recordId}>
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <Link
+                  href={`/dashboard/clientes/${cliente.recordId}`}
+                  className="min-w-0 truncate rounded font-medium hover:text-blue-800 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none dark:hover:text-blue-300"
+                >
+                  {cliente.nombre}
+                </Link>
+                <span className="shrink-0 tabular-nums">
+                  {cliente.visitas}{" "}
+                  {cliente.visitas === 1 ? "visita" : "visitas"}
+                </span>
               </div>
-              <span className="w-20 shrink-0 text-right text-xs text-slate-600 dark:text-slate-400">
-                {cliente.sector}
-              </span>
-            </div>
-          </li>
-        ))}
-      </ul>
+              <div className="mt-1.5 flex items-center gap-2">
+                <div className="h-1.5 flex-1 rounded-full bg-slate-100 dark:bg-white/10">
+                  <div
+                    className="h-1.5 rounded-full bg-amber-500"
+                    style={{ width: `${(cliente.visitas / maximo) * 100}%` }}
+                  />
+                </div>
+                <span className="w-24 shrink-0 truncate text-right text-xs text-slate-600 dark:text-slate-400">
+                  {cliente.ciudad ?? "—"}
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
 
-export function Equipo() {
+export function Equipo({ personas }: { personas: PersonaEquipo[] }) {
+  const maximo = Math.max(...personas.map((p) => p.visitas), 1);
+
   return (
     <section aria-labelledby="equipo-titulo" className={`${card} p-5`}>
       <EncabezadoPanel
         id="equipo-titulo"
-        titulo="Desempeño del equipo"
-        detalle="Cumplimiento de cuota"
+        titulo="Actividad del equipo"
+        detalle="Visitas registradas y casos a cargo"
       />
 
-      <ul className="mt-4 flex flex-col gap-4">
-        {equipo.map((persona) => (
-          <li key={persona.iniciales} className="flex items-center gap-3">
-            <span
-              aria-hidden="true"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700 dark:bg-white/10 dark:text-slate-200"
-            >
-              {persona.iniciales}
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-2 text-sm">
-                <span className="truncate font-medium">{persona.nombre}</span>
-                <span className="shrink-0 text-xs text-slate-600 tabular-nums dark:text-slate-400">
-                  {persona.cerradas} cerradas · {persona.cuota} %
-                </span>
+      {personas.length === 0 ? (
+        <Vacio texto="Nadie tiene visitas ni casos registrados." />
+      ) : (
+        <ul className="mt-4 flex flex-col gap-4">
+          {personas.map((persona) => (
+            <li key={persona.nombre} className="flex items-center gap-3">
+              <span
+                aria-hidden="true"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700 dark:bg-white/10 dark:text-slate-200"
+              >
+                {persona.iniciales}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2 text-sm">
+                  <span className="truncate font-medium">{persona.nombre}</span>
+                  <span className="shrink-0 text-xs text-slate-600 tabular-nums dark:text-slate-400">
+                    {persona.visitas}{" "}
+                    {persona.visitas === 1 ? "visita" : "visitas"}
+                    {persona.casosAbiertos > 0
+                      ? ` · ${persona.casosAbiertos} ${persona.casosAbiertos === 1 ? "caso" : "casos"}`
+                      : ""}
+                  </span>
+                </div>
+                <div className="mt-1.5 h-1.5 rounded-full bg-slate-100 dark:bg-white/10">
+                  <div
+                    className="h-1.5 rounded-full bg-blue-700 dark:bg-blue-500"
+                    style={{ width: `${(persona.visitas / maximo) * 100}%` }}
+                  />
+                </div>
               </div>
-              <div className="mt-1.5 h-1.5 rounded-full bg-slate-100 dark:bg-white/10">
-                <div
-                  className={`h-1.5 rounded-full ${
-                    persona.cuota >= 70 ? "bg-emerald-500" : "bg-blue-700 dark:bg-blue-500"
-                  }`}
-                  style={{ width: `${persona.cuota}%` }}
-                />
-              </div>
-            </div>
-          </li>
-        ))}
-      </ul>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
@@ -665,14 +556,13 @@ function EncabezadoPanel({
   id,
   titulo,
   detalle,
-  accion,
-  Icono = IconDots,
+  enlace,
 }: {
   id: string;
   titulo: string;
   detalle: string;
-  accion?: string;
-  Icono?: (props: { className?: string }) => React.ReactElement;
+  /** Solo se ofrece cuando lleva a un módulo que existe. */
+  enlace?: { href: string; texto: string };
 }) {
   return (
     <div className="flex items-start justify-between gap-3">
@@ -684,74 +574,22 @@ function EncabezadoPanel({
           {detalle}
         </p>
       </div>
-      {accion ? (
-        <button
-          type="button"
-          title="Próximamente"
-          className="flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-700 transition-colors duration-200 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none dark:text-slate-300 dark:hover:bg-white/10"
+      {enlace ? (
+        <Link
+          href={enlace.href}
+          className="shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-700 transition-colors duration-200 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none dark:text-slate-300 dark:hover:bg-white/10"
         >
-          <Icono className="h-4 w-4" />
-          {accion}
-        </button>
+          {enlace.texto}
+        </Link>
       ) : null}
     </div>
   );
 }
 
-function Leyenda({ color, texto }: { color: string; texto: string }) {
+function Vacio({ texto }: { texto: string }) {
   return (
-    <span className="flex items-center gap-1.5">
-      <span aria-hidden="true" className={`h-2.5 w-2.5 rounded-sm ${color}`} />
+    <p className="mt-6 pb-2 text-sm text-slate-600 dark:text-slate-400">
       {texto}
-    </span>
-  );
-}
-
-export function BarraFiltros() {
-  const rangos = ["Hoy", "7 días", "30 días", "Trimestre"];
-  const [activo, setActivo] = useState("30 días");
-
-  return (
-    <div className="flex flex-wrap items-center gap-3">
-      <div
-        role="group"
-        aria-label="Rango de tiempo"
-        className="flex rounded-lg border border-slate-200 bg-white p-0.5 dark:border-white/10 dark:bg-slate-900"
-      >
-        {rangos.map((rango) => (
-          <button
-            key={rango}
-            type="button"
-            onClick={() => setActivo(rango)}
-            aria-pressed={activo === rango}
-            className={`cursor-pointer rounded-md px-3 py-1.5 text-xs font-medium transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none ${
-              activo === rango
-                ? "bg-blue-700 text-white dark:bg-blue-600"
-                : "text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10"
-            }`}
-          >
-            {rango}
-          </button>
-        ))}
-      </div>
-
-      <button
-        type="button"
-        title="Próximamente"
-        className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors duration-200 hover:bg-slate-100 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-white/10"
-      >
-        <IconFilter className="h-4 w-4" />
-        Filtros
-      </button>
-
-      <button
-        type="button"
-        title="Próximamente"
-        className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors duration-200 hover:bg-slate-100 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-white/10"
-      >
-        <IconCalendar className="h-4 w-4" />
-        Ago 2026
-      </button>
-    </div>
+    </p>
   );
 }

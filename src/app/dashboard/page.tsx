@@ -1,24 +1,22 @@
 import { redirect } from "next/navigation";
 
-import { cargarAgenda } from "@/lib/agenda";
+import { formatearFecha } from "@/lib/fechas";
+import { cargarInicio } from "@/lib/inicio";
 import { getSession } from "@/lib/session";
 import { CalendarioPendientes } from "./calendario";
 import { Shell } from "./shell";
 import {
   Actividad,
-  BarraFiltros,
   Casos,
-  Embudo,
   Equipo,
   FilaKpis,
-  GraficoVentas,
-  Pipeline,
+  GraficoVisitas,
+  ResultadoDeVisitas,
   TablaSeguimientos,
-  Tareas,
   TopClientes,
 } from "./widgets";
 
-// La agenda sale de Airtable en cada carga: no debe quedarse cacheada.
+// Todo el home sale de Airtable en cada carga: no debe quedarse cacheado.
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
@@ -28,7 +26,7 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const agenda = await cargarAgenda();
+  const inicio = await cargarInicio();
 
   return (
     <Shell nombre={session.nombre} rol={session.rol}>
@@ -42,48 +40,51 @@ export default async function DashboardPage() {
               Este es el estado de tu operación comercial hoy.
             </p>
           </div>
-          <BarraFiltros />
+          <p className="text-xs text-slate-500 dark:text-slate-500">
+            Datos al {formatearFecha(inicio.hoy)}
+          </p>
         </div>
 
-        <FilaKpis />
+        {inicio.error ? (
+          <p
+            role="alert"
+            className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
+          >
+            No pudimos leer Airtable, así que esta vista está vacía. No
+            significa que no tengas actividad: vuelve a cargar en un momento.
+          </p>
+        ) : null}
+
+        <FilaKpis kpis={inicio.kpis} />
 
         <CalendarioPendientes
-          pendientes={agenda.pendientes}
-          hoy={agenda.hoy}
-          error={agenda.error}
+          pendientes={inicio.pendientes}
+          hoy={inicio.hoy}
+          error={inicio.error}
           usuario={session.nombre}
         />
 
-        <Pipeline />
-
         <div className="grid gap-6 xl:grid-cols-3">
           <div className="xl:col-span-2">
-            <GraficoVentas />
+            <GraficoVisitas puntos={inicio.visitasPorMes} />
           </div>
-          <Embudo />
+          <ResultadoDeVisitas resultados={inicio.resultados} />
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-3">
-          <div className="min-w-0 xl:col-span-2">
-            <TablaSeguimientos />
-          </div>
-          <Tareas />
-        </div>
+        <TablaSeguimientos filas={inicio.seguimientos} />
 
         <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
-          <Actividad />
-          <Casos />
+          <Actividad items={inicio.actividad} />
+          <Casos
+            casos={inicio.casos}
+            abiertos={inicio.casosAbiertos}
+            vencidos={inicio.casosVencidos}
+          />
           <div className="flex flex-col gap-6 lg:col-span-2 xl:col-span-1">
-            <TopClientes />
-            <Equipo />
+            <TopClientes clientes={inicio.topClientes} />
+            <Equipo personas={inicio.equipo} />
           </div>
         </div>
-
-        <p className="pb-2 text-center text-xs text-slate-500 dark:text-slate-500">
-          La agenda de pendientes viene de Airtable; el resto de esta vista
-          todavía es de ejemplo. La sesión sí es real:{" "}
-          {session.idEmpleado} · {session.nivelAcceso ?? "sin nivel asignado"}.
-        </p>
       </div>
     </Shell>
   );

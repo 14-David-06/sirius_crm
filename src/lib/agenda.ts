@@ -1,10 +1,14 @@
-import { listarCasosPendientes } from "@/lib/casos";
-import { hoyEnBogota, listarVisitas } from "@/lib/crm";
+import { estaCerrado, type Caso } from "@/lib/casos";
+import type { Visita } from "@/lib/crm";
 
 /**
- * Agenda del home: reúne en una sola lista los compromisos con fecha que hoy
+ * Agenda del home: reúne en una sola lista los compromisos con fecha que
  * viven en dos tablas distintas — el seguimiento pactado en una visita y la
  * fecha límite de un caso abierto.
+ *
+ * Aquí solo se arma la lista; las lecturas de Airtable las hace
+ * `cargarInicio` en `@/lib/inicio`, para no pedir las mismas tablas dos veces
+ * en la misma página.
  */
 
 export type TipoPendiente = "seguimiento" | "caso";
@@ -22,14 +26,6 @@ export type Pendiente = {
   estado: EstadoPendiente;
 };
 
-export type Agenda = {
-  pendientes: Pendiente[];
-  /** Hoy en Bogotá: lo calcula el servidor para que no dependa del reloj del navegador. */
-  hoy: string;
-  /** True si Airtable no respondió; la vista lo dice en vez de fingir cero pendientes. */
-  error: boolean;
-};
-
 const FECHA_ISO = /^\d{4}-\d{2}-\d{2}/;
 
 /** Airtable puede devolver la fecha con hora; el calendario solo usa el día. */
@@ -44,58 +40,49 @@ export function estadoPorFecha(fecha: string, hoy: string): EstadoPendiente {
   return "proximo";
 }
 
-export async function cargarAgenda(): Promise<Agenda> {
-  const hoy = hoyEnBogota();
+export function armarPendientes(
+  visitas: Visita[],
+  casos: Caso[],
+  hoy: string,
+): Pendiente[] {
+  const deVisitas: Pendiente[] = visitas.flatMap((visita) => {
+    const fecha = soloDia(visita.fechaSeguimiento);
+    if (!fecha) return [];
 
-  try {
-    const [visitas, casos] = await Promise.all([
-      listarVisitas(),
-      listarCasosPendientes(),
-    ]);
+    return [
+      {
+        id: `visita-${visita.recordId}`,
+        recordId: visita.recordId,
+        tipo: "seguimiento",
+        fecha,
+        titulo: visita.proximaAccion?.trim() || "Seguimiento pendiente",
+        cliente: visita.cliente,
+        responsable: visita.responsable,
+        estado: estadoPorFecha(fecha, hoy),
+      },
+    ];
+  });
 
-    const deVisitas: Pendiente[] = visitas.flatMap((visita) => {
-      const fecha = soloDia(visita.fechaSeguimiento);
-      if (!fecha) return [];
+  const deCasos: Pendiente[] = casos.flatMap((caso) => {
+    const fecha = soloDia(caso.fechaLimite);
+    if (!fecha || estaCerrado(caso.estado)) return [];
 
-      return [
-        {
-          id: `visita-${visita.recordId}`,
-          recordId: visita.recordId,
-          tipo: "seguimiento",
-          fecha,
-          titulo: visita.proximaAccion?.trim() || "Seguimiento pendiente",
-          cliente: visita.cliente,
-          responsable: visita.responsable,
-          estado: estadoPorFecha(fecha, hoy),
-        },
-      ];
-    });
+    return [
+      {
+        id: `caso-${caso.recordId}`,
+        recordId: caso.recordId,
+        tipo: "caso",
+        fecha,
+        titulo: caso.descripcion?.trim() || caso.tipo?.trim() || "Caso abierto",
+        cliente: caso.cliente,
+        responsable: caso.responsable,
+        estado: estadoPorFecha(fecha, hoy),
+      },
+    ];
+  });
 
-    const deCasos: Pendiente[] = casos.flatMap((caso) => {
-      const fecha = soloDia(caso.fechaLimite);
-      if (!fecha) return [];
-
-      return [
-        {
-          id: `caso-${caso.recordId}`,
-          recordId: caso.recordId,
-          tipo: "caso",
-          fecha,
-          titulo: caso.descripcion?.trim() || caso.tipo?.trim() || "Caso abierto",
-          cliente: caso.cliente,
-          responsable: caso.responsable,
-          estado: estadoPorFecha(fecha, hoy),
-        },
-      ];
-    });
-
-    const pendientes = [...deVisitas, ...deCasos].sort(
-      (a, b) => a.fecha.localeCompare(b.fecha) || a.cliente.localeCompare(b.cliente, "es"),
-    );
-
-    return { pendientes, hoy, error: false };
-  } catch (error) {
-    console.error("cargar agenda", error);
-    return { pendientes: [], hoy, error: true };
-  }
+  return [...deVisitas, ...deCasos].sort(
+    (a, b) =>
+      a.fecha.localeCompare(b.fecha) || a.cliente.localeCompare(b.cliente, "es"),
+  );
 }

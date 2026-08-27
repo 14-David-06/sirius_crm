@@ -53,12 +53,7 @@ const grupos: { titulo: string; items: ItemNav[] }[] = [
         Icono: IconUsers,
         href: "/dashboard/contactos",
       },
-      {
-        id: "oportunidades",
-        etiqueta: "Oportunidades",
-        Icono: IconTrending,
-        contador: 38,
-      },
+      { id: "oportunidades", etiqueta: "Oportunidades", Icono: IconTrending },
       {
         id: "visitas",
         etiqueta: "Visitas",
@@ -84,7 +79,7 @@ const grupos: { titulo: string; items: ItemNav[] }[] = [
         Icono: IconLifebuoy,
         href: "/dashboard/casos",
       },
-      { id: "tareas", etiqueta: "Tareas", Icono: IconCheckSquare, contador: 4 },
+      { id: "tareas", etiqueta: "Tareas", Icono: IconCheckSquare },
     ],
   },
   {
@@ -235,15 +230,6 @@ function Sidebar({
           </div>
         ))}
       </nav>
-
-      <div className="border-t border-slate-200 p-3 dark:border-white/10">
-        <div className="rounded-xl bg-slate-100 p-4 dark:bg-white/5">
-          <p className="text-sm font-semibold">Plan de siembra 2027</p>
-          <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-            12 cuentas clave sin visita en los últimos 60 días.
-          </p>
-        </div>
-      </div>
     </aside>
   );
 }
