@@ -231,33 +231,7 @@ export async function listarCasosPendientes(): Promise<CasoPendiente[]> {
     );
 }
 
-/* ------------------------ Catálogos (otras bases) ----------------------- */
-
-export type ClienteCore = {
-  recordId: string;
-  id: string;
-  nombre: string;
-  ciudad: string | null;
-  departamento: string | null;
-};
-
-export async function listarClientes(): Promise<ClienteCore[]> {
-  const registros = await listarRegistros(env.baseClientes, env.tablaClientes, {
-    fields: ["ID", "Cliente", "Ciudad", "Departamento", "Estado Cliente"],
-  });
-
-  return registros
-    .map((registro) => ({
-      recordId: registro.id,
-      id: texto(registro.fields["ID"]) ?? "",
-      nombre: texto(registro.fields["Cliente"]) ?? "",
-      ciudad: texto(registro.fields["Ciudad"]),
-      departamento: texto(registro.fields["Departamento"]),
-      estado: texto(registro.fields["Estado Cliente"]),
-    }))
-    .filter((cliente) => cliente.nombre && cliente.estado !== "Inactivo")
-    .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
-}
+/* ------------------ Catálogo de productos (otra base) ------------------ */
 
 export type ProductoCore = {
   recordId: string;

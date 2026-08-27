@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { interpretarDictado, sumarDias } from "@/lib/dictado";
+import type { ClienteCore } from "@/lib/clientes";
 import {
   RESULTADOS_VISITA,
   TIPOS_VISITA,
-  type ClienteCore,
   type ProductoCore,
   type Visita,
 } from "@/lib/crm";
@@ -179,6 +179,10 @@ export function FormularioVisita({
     if (lectura.proximaAccion) {
       cambios.proximaAccion = unir(datos.proximaAccion, lectura.proximaAccion);
     }
+    if (lectura.observaciones) {
+      cambios.observaciones = unir(datos.observaciones, lectura.observaciones);
+      detectado.push("observaciones");
+    }
 
     actualizar(cambios);
     setInterpretado(detectado);
@@ -298,6 +302,15 @@ export function FormularioVisita({
                 controlar plaga, les presenté Biochar Blend, quedamos en enviar
                 cotización la próxima semana”. Repartimos el texto en los campos
                 y tú revisas.
+              </p>
+              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                Para mayor precisión, nombra el campo mientras hablas:{" "}
+                <span className="font-medium">“la próxima acción es…”</span>,{" "}
+                <span className="font-medium">“las observaciones son…”</span>,{" "}
+                <span className="font-medium">
+                  “la fecha del próximo seguimiento es el 30 de agosto”
+                </span>
+                .
               </p>
             </div>
             <Microfono

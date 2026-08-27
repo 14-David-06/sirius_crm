@@ -269,3 +269,29 @@ export function IconDots(props: IconProps) {
     </Svg>
   );
 }
+
+export function IconChevronLeft(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M14.5 5.5 8 12l6.5 6.5" />
+    </Svg>
+  );
+}
+
+export function IconChevronRight(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M9.5 5.5 16 12l-6.5 6.5" />
+    </Svg>
+  );
+}
+
+export function IconAlert(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 4.5 2.8 20h18.4L12 4.5Z" />
+      <path d="M12 10v4" />
+      <circle cx="12" cy="17" r="0.9" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}

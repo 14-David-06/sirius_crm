@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import type { CasoPendiente, ClienteCore, ProductoCore, Visita } from "@/lib/crm";
+import type { ClienteCore } from "@/lib/clientes";
+import type { CasoPendiente, ProductoCore, Visita } from "@/lib/crm";
 import { RESULTADOS_VISITA, TIPOS_VISITA } from "@/lib/crm";
 import {
   IconCalendar,

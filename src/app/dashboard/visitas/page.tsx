@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
 
 import { listarPersonalActivo } from "@/lib/airtable";
+import { listarClientes } from "@/lib/clientes";
 import {
   hoyEnBogota,
   listarCasosPendientes,
-  listarClientes,
   listarProductos,
   listarVisitas,
 } from "@/lib/crm";

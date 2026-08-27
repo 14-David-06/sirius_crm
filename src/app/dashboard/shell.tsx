@@ -40,7 +40,12 @@ const grupos: { titulo: string; items: ItemNav[] }[] = [
     titulo: "Comercial",
     items: [
       { id: "inicio", etiqueta: "Inicio", Icono: IconHome, href: "/dashboard" },
-      { id: "clientes", etiqueta: "Clientes", Icono: IconBuilding },
+      {
+        id: "clientes",
+        etiqueta: "Clientes",
+        Icono: IconBuilding,
+        href: "/dashboard/clientes",
+      },
       { id: "contactos", etiqueta: "Contactos", Icono: IconUsers },
       {
         id: "oportunidades",

@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 
+import { cargarAgenda } from "@/lib/agenda";
 import { getSession } from "@/lib/session";
+import { CalendarioPendientes } from "./calendario";
 import { Shell } from "./shell";
 import {
   Actividad,
@@ -16,12 +18,17 @@ import {
   TopClientes,
 } from "./widgets";
 
+// La agenda sale de Airtable en cada carga: no debe quedarse cacheada.
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
   const session = await getSession();
 
   if (!session) {
     redirect("/login");
   }
+
+  const agenda = await cargarAgenda();
 
   return (
     <Shell nombre={session.nombre} rol={session.rol}>
@@ -39,6 +46,13 @@ export default async function DashboardPage() {
         </div>
 
         <FilaKpis />
+
+        <CalendarioPendientes
+          pendientes={agenda.pendientes}
+          hoy={agenda.hoy}
+          error={agenda.error}
+          usuario={session.nombre}
+        />
 
         <Pipeline />
 
@@ -66,7 +80,8 @@ export default async function DashboardPage() {
         </div>
 
         <p className="pb-2 text-center text-xs text-slate-500 dark:text-slate-500">
-          Los datos de esta vista son de ejemplo. La sesión sí es real:{" "}
+          La agenda de pendientes viene de Airtable; el resto de esta vista
+          todavía es de ejemplo. La sesión sí es real:{" "}
           {session.idEmpleado} · {session.nivelAcceso ?? "sin nivel asignado"}.
         </p>
       </div>

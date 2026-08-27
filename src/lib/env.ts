@@ -61,6 +61,12 @@ export const env = {
       process.env.AIRTABLE_TABLE_PERSONAL_CLIENTE,
     );
   },
+  get tablaCultivos() {
+    return required(
+      "AIRTABLE_TABLE_CULTIVOS",
+      process.env.AIRTABLE_TABLE_CULTIVOS,
+    );
+  },
 
   /* Sirius Product Core — catálogo */
   get baseProductos() {
