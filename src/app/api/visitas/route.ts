@@ -10,6 +10,7 @@ import {
 } from "@/lib/crm";
 import { esErrorAutoria, resolverAutoria } from "@/lib/autoria";
 import { filtrarPorAlcance, permisosDe } from "@/lib/permisos";
+import { ETIQUETAS, invalidar } from "@/lib/cache";
 import { getSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -147,6 +148,7 @@ export async function POST(request: Request) {
       observaciones: cadena(body.observaciones) ?? undefined,
     });
 
+    invalidar(ETIQUETAS.visitas);
     return NextResponse.json({ visita }, { status: 201 });
   } catch (error) {
     console.error("crear visita", error);

@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Tipos
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Pruebas
+        run: npm test
+
+      # El build no necesita credenciales: `env.ts` expone las variables como
+      # getters y las páginas son dinámicas, así que nadie las lee al compilar.
+      # Si algún día se agrega una página estática que lea Airtable, este paso
+      # fallará con el mensaje de `env.ts`, que es la señal correcta.
+      - name: Build
+        run: npm run build

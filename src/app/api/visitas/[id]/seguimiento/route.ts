@@ -7,6 +7,7 @@ import {
   reprogramarSeguimiento,
 } from "@/lib/crm";
 import { permisosDe, puedeEditar } from "@/lib/permisos";
+import { ETIQUETAS, invalidar } from "@/lib/cache";
 import { getSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -57,9 +58,13 @@ export async function PATCH(
       if (!FECHA.test(fecha)) {
         return NextResponse.json({ error: "Fecha inválida." }, { status: 400 });
       }
-      return NextResponse.json({
-        visita: await reprogramarSeguimiento(id, fecha, session.idEmpleado),
-      });
+      const actualizada = await reprogramarSeguimiento(
+        id,
+        fecha,
+        session.idEmpleado,
+      );
+      invalidar(ETIQUETAS.visitas);
+      return NextResponse.json({ visita: actualizada });
     }
 
     if (body?.accion === "cumplido") {
@@ -70,15 +75,15 @@ export async function PATCH(
       const observaciones =
         typeof body.observaciones === "string" ? body.observaciones : null;
 
-      return NextResponse.json({
-        visita: await cerrarSeguimiento(
-          id,
-          nota,
-          observaciones,
-          hoyEnBogota(),
-          session.idEmpleado,
-        ),
-      });
+      const cerrada = await cerrarSeguimiento(
+        id,
+        nota,
+        observaciones,
+        hoyEnBogota(),
+        session.idEmpleado,
+      );
+      invalidar(ETIQUETAS.visitas);
+      return NextResponse.json({ visita: cerrada });
     }
 
     return NextResponse.json({ error: "Acción inválida." }, { status: 400 });

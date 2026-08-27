@@ -71,7 +71,12 @@ const grupos: { titulo: string; items: ItemNav[] }[] = [
   {
     titulo: "Operación",
     items: [
-      { id: "pedidos", etiqueta: "Pedidos", Icono: IconCart },
+      {
+        id: "pedidos",
+        etiqueta: "Pedidos",
+        Icono: IconCart,
+        href: "/dashboard/pedidos",
+      },
       {
         id: "productos",
         deEquipo: true,

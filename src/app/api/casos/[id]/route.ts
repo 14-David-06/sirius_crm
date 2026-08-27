@@ -8,6 +8,7 @@ import {
   type EstadoCaso,
 } from "@/lib/casos";
 import { permisosDe, puedeEditar } from "@/lib/permisos";
+import { ETIQUETAS, invalidar } from "@/lib/cache";
 import { getSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -62,14 +63,14 @@ export async function PATCH(
           ? body.observaciones.trim()
           : null;
 
-      return NextResponse.json({
-        caso: await cambiarEstadoCaso(
-          id,
-          estado as EstadoCaso,
-          observaciones,
-          session.idEmpleado,
-        ),
-      });
+      const actualizado = await cambiarEstadoCaso(
+        id,
+        estado as EstadoCaso,
+        observaciones,
+        session.idEmpleado,
+      );
+      invalidar(ETIQUETAS.casos);
+      return NextResponse.json({ caso: actualizado });
     }
 
     if (body?.accion === "reprogramar") {
@@ -78,7 +79,9 @@ export async function PATCH(
         return NextResponse.json({ error: "Fecha inválida." }, { status: 400 });
       }
 
-      return NextResponse.json({ caso: await reprogramarLimite(id, fecha, session.idEmpleado) });
+      const movido = await reprogramarLimite(id, fecha, session.idEmpleado);
+      invalidar(ETIQUETAS.casos);
+      return NextResponse.json({ caso: movido });
     }
 
     return NextResponse.json({ error: "Acción inválida." }, { status: 400 });

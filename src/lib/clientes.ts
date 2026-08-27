@@ -5,6 +5,7 @@ import {
   texto,
   type AirtableRecord,
 } from "@/lib/airtable";
+import { cachearLectura, ETIQUETAS } from "@/lib/cache";
 import { env } from "@/lib/env";
 
 /**
@@ -141,39 +142,69 @@ function aCliente(record: AirtableRecord): Cliente {
   };
 }
 
+const leerClientes = cachearLectura(
+  "clientes",
+  ETIQUETAS.clientes,
+  async (): Promise<Cliente[]> => {
+    const registros = await listarRegistros(
+      env.baseClientes,
+      env.tablaClientes,
+      { fields: Object.values(CAMPOS_CLIENTE) },
+    );
+
+    return registros
+      .map(aCliente)
+      .filter((cliente) => cliente.nombre)
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  },
+);
+
 /** Todos los clientes, activos e inactivos, para el listado del módulo. */
 export async function listarClientesCompletos(): Promise<Cliente[]> {
-  const registros = await listarRegistros(env.baseClientes, env.tablaClientes, {
-    fields: Object.values(CAMPOS_CLIENTE),
-  });
-
-  return registros
-    .map(aCliente)
-    .filter((cliente) => cliente.nombre)
-    .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  return leerClientes();
 }
+
+const leerCliente = cachearLectura(
+  "cliente",
+  ETIQUETAS.clientes,
+  async (recordId: string): Promise<Cliente | null> => {
+    const registros = await listarRegistros(
+      env.baseClientes,
+      env.tablaClientes,
+      {
+        fields: Object.values(CAMPOS_CLIENTE),
+        filterByFormula: `RECORD_ID() = '${recordId}'`,
+        maxRecords: 1,
+      },
+    );
+
+    return registros[0] ? aCliente(registros[0]) : null;
+  },
+);
 
 export async function obtenerCliente(recordId: string): Promise<Cliente | null> {
-  const registros = await listarRegistros(env.baseClientes, env.tablaClientes, {
-    fields: Object.values(CAMPOS_CLIENTE),
-    filterByFormula: `RECORD_ID() = '${recordId}'`,
-    maxRecords: 1,
-  });
-
-  return registros[0] ? aCliente(registros[0]) : null;
+  return leerCliente(recordId);
 }
 
-export async function listarContactos(): Promise<ContactoCliente[]> {
-  const registros = await listarRegistros(
-    env.baseClientes,
-    env.tablaPersonalCliente,
-    { fields: Object.values(CAMPOS_CONTACTO) },
-  );
+const leerContactos = cachearLectura(
+  "contactos",
+  ETIQUETAS.contactos,
+  async (): Promise<ContactoCliente[]> => {
+    const registros = await listarRegistros(
+      env.baseClientes,
+      env.tablaPersonalCliente,
+      { fields: Object.values(CAMPOS_CONTACTO) },
+    );
 
-  return registros
-    .map(aContacto)
-    .filter((contacto) => contacto.nombre)
-    .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+    return registros
+      .map(aContacto)
+      .filter((contacto) => contacto.nombre)
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  },
+);
+
+export async function listarContactos(): Promise<ContactoCliente[]> {
+  return leerContactos();
 }
 
 export type EntradaContacto = {
@@ -264,7 +295,10 @@ export async function cambiarEstadoContacto(
   return aContacto(registro);
 }
 
-export async function listarCultivos(): Promise<CultivoCliente[]> {
+const leerCultivos = cachearLectura(
+  "cultivos",
+  ETIQUETAS.cultivos,
+  async (): Promise<CultivoCliente[]> => {
   const registros = await listarRegistros(env.baseClientes, env.tablaCultivos, {
     fields: Object.values(CAMPOS_CULTIVO),
   });
@@ -284,6 +318,11 @@ export async function listarCultivos(): Promise<CultivoCliente[]> {
       };
     })
     .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  },
+);
+
+export async function listarCultivos(): Promise<CultivoCliente[]> {
+  return leerCultivos();
 }
 
 /* ------------------------- Selector del formulario ----------------------- */

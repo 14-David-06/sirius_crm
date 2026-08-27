@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 
 import { interpretarDictado, sumarDias } from "@/lib/dictado";
 import type { ClienteCore } from "@/lib/clientes";
-import { RESULTADOS_VISITA, TIPOS_VISITA, type Visita } from "@/lib/crm";
+import type { Visita } from "@/lib/crm";
+import { RESULTADOS_VISITA, TIPOS_VISITA } from "@/lib/crm-comun";
 import type { Producto } from "@/lib/productos";
 import { IconClose } from "../icons";
 import { Microfono } from "./microfono";

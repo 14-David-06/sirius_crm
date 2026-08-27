@@ -5,6 +5,14 @@ import {
   texto,
 } from "@/lib/airtable";
 import { hoyEnBogota } from "@/lib/crm";
+import { cachearLectura, ETIQUETAS } from "@/lib/cache";
+import {
+  alertaPorFecha,
+  estaCerrado,
+  type AlertaSla,
+  type EstadoCaso,
+  type TipoCaso,
+} from "@/lib/casos-comun";
 import { env } from "@/lib/env";
 
 /**
@@ -31,30 +39,17 @@ const CAMPOS_CASO = {
   diasAbierto: "Días Abierto",
 } as const;
 
-export const TIPOS_CASO = [
-  "Comercial",
-  "Técnico o agronómico",
-  "Queja o reclamo",
-  "Solicitud de información",
-  "Otro",
-] as const;
-
-export const ESTADOS_CASO = [
-  "Abierto",
-  "En proceso",
-  "Resuelto",
-  "Cerrado",
-] as const;
-
-export type TipoCaso = (typeof TIPOS_CASO)[number];
-export type EstadoCaso = (typeof ESTADOS_CASO)[number];
-
-/** Un caso deja de exigir acción del equipo cuando se resuelve o se cierra. */
-export function estaCerrado(estado: string | null): boolean {
-  return estado === "Resuelto" || estado === "Cerrado";
-}
-
-export type AlertaSla = "vencido" | "hoy" | "en-plazo" | "sin-plazo" | "cerrado";
+export {
+  ESTADOS_CASO,
+  estaCerrado,
+  TIPOS_CASO,
+  alertaPorFecha,
+} from "@/lib/casos-comun";
+export type {
+  AlertaSla,
+  EstadoCaso,
+  TipoCaso,
+} from "@/lib/casos-comun";
 
 export type Caso = {
   recordId: string;
@@ -101,17 +96,6 @@ function idsEnlazados(valor: unknown): string[] {
     : [];
 }
 
-export function alertaPorFecha(
-  estado: string | null,
-  fechaLimite: string | null,
-  hoy: string,
-): AlertaSla {
-  if (estaCerrado(estado)) return "cerrado";
-  if (!fechaLimite) return "sin-plazo";
-  if (fechaLimite < hoy) return "vencido";
-  if (fechaLimite === hoy) return "hoy";
-  return "en-plazo";
-}
 
 function aCaso(
   registro: { id: string; fields: Record<string, unknown> },
@@ -142,14 +126,21 @@ function aCaso(
   };
 }
 
-export async function listarCasos(): Promise<Caso[]> {
-  const registros = await listarRegistros(env.baseCrm, env.tablaCasos, {
-    fields: Object.values(CAMPOS_CASO),
-    sort: [{ field: CAMPOS_CASO.fechaApertura, direction: "desc" }],
-  });
+const leerCasos = cachearLectura(
+  "casos",
+  ETIQUETAS.casos,
+  async (): Promise<Caso[]> => {
+    const registros = await listarRegistros(env.baseCrm, env.tablaCasos, {
+      fields: Object.values(CAMPOS_CASO),
+      sort: [{ field: CAMPOS_CASO.fechaApertura, direction: "desc" }],
+    });
+    const hoy = hoyEnBogota();
+    return registros.map((registro) => aCaso(registro, hoy));
+  },
+);
 
-  const hoy = hoyEnBogota();
-  return registros.map((registro) => aCaso(registro, hoy));
+export async function listarCasos(): Promise<Caso[]> {
+  return leerCasos();
 }
 
 /** Un caso por su recordId, para verificar de quién es antes de escribirlo. */

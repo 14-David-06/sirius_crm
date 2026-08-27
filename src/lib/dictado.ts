@@ -371,7 +371,7 @@ function detectarResultado(plano: string): string | null {
     return "Cotización enviada";
   }
   if (
-    /(sin interes|no le interesa|no esta interesado|no quiere por ahora|nos dijo que no)/.test(
+    /(sin interes|no les? interesa|no esta interesado|no quiere por ahora|nos dijo que no)/.test(
       plano,
     )
   ) {
@@ -384,7 +384,7 @@ function detectarResultado(plano: string): string | null {
   ) {
     return "Interesado";
   }
-  if (/(seguimiento|volver a|quedamos en|pendiente)/.test(plano)) {
+  if (/(seguimiento|volver a|qued(?:amos|e|o) en|pendiente)/.test(plano)) {
     return "Seguimiento pendiente";
   }
   return null;

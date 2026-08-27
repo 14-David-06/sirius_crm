@@ -1,3 +1,4 @@
+import { cachearLectura, ETIQUETAS } from "@/lib/cache";
 import { env } from "@/lib/env";
 
 const AIRTABLE_API = "https://api.airtable.com/v0";
@@ -8,28 +9,73 @@ export type AirtableRecord = {
   fields: Record<string, unknown>;
 };
 
-/** Cliente HTTP mínimo sobre la REST API de Airtable. */
+/**
+ * Airtable corta en 5 peticiones por segundo y por base, y responde 429. Sin
+ * reintento eso se convierte en una excepción y la página entera se cae, así
+ * que se reintenta con espera creciente. También se reintentan los 5xx, que
+ * son fallos transitorios del lado de Airtable.
+ */
+const REINTENTOS = 3;
+const ESPERA_BASE_MS = 500;
+
+function esReintentable(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
+/** Espera del `Retry-After` si viene, o exponencial con algo de dispersión. */
+function esperaMs(respuesta: Response, intento: number): number {
+  const cabecera = Number(respuesta.headers.get("retry-after"));
+  if (Number.isFinite(cabecera) && cabecera > 0) {
+    return Math.min(cabecera * 1000, 30_000);
+  }
+  // La dispersión evita que varias peticiones en paralelo reintenten al unísono.
+  const exponencial = ESPERA_BASE_MS * 2 ** intento;
+  return Math.min(exponencial + Math.random() * 250, 8_000);
+}
+
+function dormir(ms: number): Promise<void> {
+  return new Promise((resolver) => setTimeout(resolver, ms));
+}
+
+/** Cliente HTTP mínimo sobre la REST API de Airtable, con reintentos. */
 export async function airtableRequest<T>(
   baseId: string,
   path: string,
   init?: RequestInit,
 ): Promise<T> {
-  const response = await fetch(`${AIRTABLE_API}/${baseId}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${env.airtableApiKey}`,
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
-    cache: "no-store",
-  });
+  let ultimoDetalle = "";
+  let ultimoStatus = 0;
 
-  if (!response.ok) {
-    const detalle = await response.text();
-    throw new Error(`Airtable ${response.status}: ${detalle.slice(0, 300)}`);
+  for (let intento = 0; intento <= REINTENTOS; intento += 1) {
+    const response = await fetch(`${AIRTABLE_API}/${baseId}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${env.airtableApiKey}`,
+        "Content-Type": "application/json",
+        ...init?.headers,
+      },
+      cache: "no-store",
+    });
+
+    if (response.ok) {
+      return response.json() as Promise<T>;
+    }
+
+    ultimoStatus = response.status;
+    ultimoDetalle = await response.text();
+
+    if (!esReintentable(response.status) || intento === REINTENTOS) {
+      break;
+    }
+
+    const espera = esperaMs(response, intento);
+    console.warn(
+      `Airtable ${response.status} en ${path.slice(0, 60)} · reintento ${intento + 1}/${REINTENTOS} en ${Math.round(espera)}ms`,
+    );
+    await dormir(espera);
   }
 
-  return response.json() as Promise<T>;
+  throw new Error(`Airtable ${ultimoStatus}: ${ultimoDetalle.slice(0, 300)}`);
 }
 
 /** Trae todos los registros de una tabla paginando hasta agotar el offset. */
@@ -187,28 +233,36 @@ export async function savePasswordHash(
 export type PersonaActiva = {
   nombre: string;
   rol: string | null;
-  /** ID Empleado ("SIRIUS-PER-0021"): la clave con la que el CRM marca autoría. */
+  /** ID Empleado ("SIRIUS-PER-XXXX"): la clave con la que el CRM marca autoría. */
   idEmpleado: string;
 };
 
+const leerPersonal = cachearLectura(
+  "personal-activo",
+  ETIQUETAS.personal,
+  async (): Promise<PersonaActiva[]> => {
+    const registros = await listarRegistros(env.baseNomina, env.tablaPersonal, {
+      fields: [
+        CAMPOS_PERSONAL.nombre,
+        CAMPOS_PERSONAL.estado,
+        CAMPOS_PERSONAL.rol,
+        CAMPOS_PERSONAL.idEmpleado,
+      ],
+      filterByFormula: `{${CAMPOS_PERSONAL.estado}} = 'Activo'`,
+    });
+
+    return registros
+      .map((registro) => ({
+        nombre: texto(registro.fields[CAMPOS_PERSONAL.nombre]) ?? "",
+        rol: texto(registro.fields[CAMPOS_PERSONAL.rol]),
+        idEmpleado: texto(registro.fields[CAMPOS_PERSONAL.idEmpleado]) ?? "",
+      }))
+      .filter((persona) => persona.nombre && persona.idEmpleado)
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  },
+);
+
 /** Personal activo, para el selector de responsable comercial. */
 export async function listarPersonalActivo(): Promise<PersonaActiva[]> {
-  const registros = await listarRegistros(env.baseNomina, env.tablaPersonal, {
-    fields: [
-      CAMPOS_PERSONAL.nombre,
-      CAMPOS_PERSONAL.estado,
-      CAMPOS_PERSONAL.rol,
-      CAMPOS_PERSONAL.idEmpleado,
-    ],
-    filterByFormula: `{${CAMPOS_PERSONAL.estado}} = 'Activo'`,
-  });
-
-  return registros
-    .map((registro) => ({
-      nombre: texto(registro.fields[CAMPOS_PERSONAL.nombre]) ?? "",
-      rol: texto(registro.fields[CAMPOS_PERSONAL.rol]),
-      idEmpleado: texto(registro.fields[CAMPOS_PERSONAL.idEmpleado]) ?? "",
-    }))
-    .filter((persona) => persona.nombre && persona.idEmpleado)
-    .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  return leerPersonal();
 }

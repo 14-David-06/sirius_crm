@@ -14,7 +14,7 @@ import {
   type CategoriaProducto,
   type TipoProducto,
   type UnidadProducto,
-} from "@/lib/productos";
+} from "@/lib/productos-comun";
 import { IconClose } from "../icons";
 
 const input =

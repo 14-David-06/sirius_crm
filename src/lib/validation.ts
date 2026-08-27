@@ -19,3 +19,15 @@ export function validatePassword(value: unknown): string | null {
   }
   return null;
 }
+
+/**
+ * Solo el primer nombre.
+ *
+ * `/api/auth/lookup` responde antes de que nadie se autentique, así que no
+ * debe entregar el nombre legal completo de una persona a quien apenas acertó
+ * una cédula. Con el primer nombre alcanza para confirmar que se escribió bien
+ * ("Hola, Ana"), que es lo único que la pantalla muestra.
+ */
+export function primerNombre(nombre: string): string {
+  return nombre.trim().split(/\s+/)[0] ?? "";
+}

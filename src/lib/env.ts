@@ -81,4 +81,35 @@ export const env = {
       process.env.AIRTABLE_TABLE_PRODUCTOS,
     );
   },
+
+  /* Sirius Pedidos Core — pedidos y sus líneas de producto */
+  get basePedidos() {
+    return required("AIRTABLE_BASE_PEDIDOS", process.env.AIRTABLE_BASE_PEDIDOS);
+  },
+  get tablaPedidos() {
+    return required(
+      "AIRTABLE_TABLE_PEDIDOS",
+      process.env.AIRTABLE_TABLE_PEDIDOS,
+    );
+  },
+  get tablaDetallesPedido() {
+    return required(
+      "AIRTABLE_TABLE_DETALLES_PEDIDO",
+      process.env.AIRTABLE_TABLE_DETALLES_PEDIDO,
+    );
+  },
+
+  /* Sirius Remisiones Core — despacho y entrega de cada pedido */
+  get baseRemisiones() {
+    return required(
+      "AIRTABLE_BASE_REMISIONES",
+      process.env.AIRTABLE_BASE_REMISIONES,
+    );
+  },
+  get tablaRemisiones() {
+    return required(
+      "AIRTABLE_TABLE_REMISIONES",
+      process.env.AIRTABLE_TABLE_REMISIONES,
+    );
+  },
 };

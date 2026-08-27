@@ -5,7 +5,15 @@ import {
   texto,
   type AirtableRecord,
 } from "@/lib/airtable";
+import { cachearLectura, ETIQUETAS } from "@/lib/cache";
 import { env } from "@/lib/env";
+import type {
+  AreaProducto,
+  CategoriaCpCn,
+  CategoriaProducto,
+  TipoProducto,
+  UnidadProducto,
+} from "@/lib/productos-comun";
 
 /**
  * Base "Sirius Product Core": el catálogo comercial. Vive aparte de la base
@@ -31,34 +39,22 @@ const CAMPOS_PRODUCTO = {
   modificadoPor: "Modificado Por ID",
 } as const;
 
-export const CATEGORIAS_PRODUCTO = [
-  "Microbiología agrícola",
-  "Mezcla biológica",
-  "Enmienda orgánica",
-] as const;
-
-export const TIPOS_PRODUCTO = [
-  "Hongo",
-  "Bacteria",
-  "Experimento",
-  "Fertilizante",
-] as const;
-
-export const UNIDADES_PRODUCTO = ["L", "Kg", "Bolsa", "Unidad"] as const;
-
-export const AREAS_PRODUCTO = ["Pirolisis", "Laboratorio"] as const;
-
-export const CATEGORIAS_CP_CN = [
-  "Crop Protection",
-  "Crop Nutrition",
-  "N/A",
-] as const;
-
-export type CategoriaProducto = (typeof CATEGORIAS_PRODUCTO)[number];
-export type TipoProducto = (typeof TIPOS_PRODUCTO)[number];
-export type UnidadProducto = (typeof UNIDADES_PRODUCTO)[number];
-export type AreaProducto = (typeof AREAS_PRODUCTO)[number];
-export type CategoriaCpCn = (typeof CATEGORIAS_CP_CN)[number];
+export {
+  AREAS_PRODUCTO,
+  CATEGORIAS_CP_CN,
+  CATEGORIAS_PRODUCTO,
+  formatearPrecio,
+  leerPrecio,
+  TIPOS_PRODUCTO,
+  UNIDADES_PRODUCTO,
+} from "@/lib/productos-comun";
+export type {
+  AreaProducto,
+  CategoriaCpCn,
+  CategoriaProducto,
+  TipoProducto,
+  UnidadProducto,
+} from "@/lib/productos-comun";
 
 export type Producto = {
   recordId: string;
@@ -109,18 +105,26 @@ function aProducto(registro: AirtableRecord): Producto {
   };
 }
 
+const leerProductos = cachearLectura(
+  "productos",
+  ETIQUETAS.productos,
+  async (): Promise<Producto[]> => {
+    const registros = await listarRegistros(
+      env.baseProductos,
+      env.tablaProductos,
+      { fields: Object.values(CAMPOS_PRODUCTO) },
+    );
+
+    return registros
+      .map(aProducto)
+      .filter((producto) => producto.nombre)
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  },
+);
+
 /** Todo el catálogo, activo e inactivo, para el módulo de Productos. */
 export async function listarProductos(): Promise<Producto[]> {
-  const registros = await listarRegistros(
-    env.baseProductos,
-    env.tablaProductos,
-    { fields: Object.values(CAMPOS_PRODUCTO) },
-  );
-
-  return registros
-    .map(aProducto)
-    .filter((producto) => producto.nombre)
-    .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  return leerProductos();
 }
 
 /** Solo los vigentes: es la lista que se ofrece al registrar una visita. */
@@ -213,33 +217,4 @@ export async function cambiarEstadoProducto(
     },
   );
   return aProducto(registro);
-}
-
-const PESOS = new Intl.NumberFormat("es-CO", {
-  style: "currency",
-  currency: "COP",
-  maximumFractionDigits: 0,
-});
-
-/** Precio con su unidad: "$45.000 / L". Sin precio no inventa un cero. */
-export function formatearPrecio(
-  precio: number | null,
-  unidad: string | null,
-): string {
-  if (precio === null) return "—";
-  return unidad ? `${PESOS.format(precio)} / ${unidad}` : PESOS.format(precio);
-}
-
-/**
- * Lee un precio que llega del formulario: null si viene vacío (sin asignar)
- * y "invalido" si no es un número usable. El cero es un precio legítimo —
- * las muestras y los ensayos van en cero.
- */
-export function leerPrecio(valor: unknown): number | null | "invalido" {
-  if (valor === undefined || valor === null || valor === "") return null;
-
-  const numero = typeof valor === "number" ? valor : Number(String(valor));
-  if (!Number.isFinite(numero) || numero < 0) return "invalido";
-
-  return numero;
 }

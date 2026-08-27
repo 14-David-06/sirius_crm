@@ -3,7 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { ESTADOS_CASO, TIPOS_CASO, type EstadoCaso, type TipoCaso } from "@/lib/casos";
+import {
+  ESTADOS_CASO,
+  TIPOS_CASO,
+  type EstadoCaso,
+  type TipoCaso,
+} from "@/lib/casos-comun";
 import type { ClienteCore } from "@/lib/clientes";
 import { formatearFecha } from "@/lib/fechas";
 import { IconClose } from "../icons";

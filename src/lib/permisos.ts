@@ -38,6 +38,8 @@ export type Permisos = {
   nivel: Nivel | null;
   /** 1 es el más alto; 99 cuando no hay nivel reconocido. */
   orden: number;
+  /** Puede leer sus propios registros. Falso solo sin nivel asignado. */
+  leerPropio: boolean;
   /** Puede leer registros de otras personas. */
   verTodo: boolean;
   /** Puede crear visitas y casos. */
@@ -55,6 +57,9 @@ export type Permisos = {
 const MINIMO: Permisos = {
   nivel: null,
   orden: 99,
+  // Sin nivel no se lee nada, ni lo propio: la pantalla explica el motivo y a
+  // quién pedirlo, que es más útil que una tabla vacía sin razón aparente.
+  leerPropio: false,
   verTodo: false,
   crear: false,
   actualizarPropio: false,
@@ -83,6 +88,8 @@ export function permisosDe(
   return {
     nivel,
     orden,
+    // Todos los niveles definidos leen lo propio; "Lectura" solo eso.
+    leerPropio: true,
     verTodo: mando,
     // "Avanzado" y "Lectura" no crean registros operativos; "Usuario" sí, propios.
     crear: mando || nivel === "Usuario",
@@ -142,6 +149,7 @@ export function filtrarPorAlcance<T extends Autor>(
   sesion: { idEmpleado: string; nombre: string },
 ): T[] {
   if (permisos.verTodo) return registros;
+  if (!permisos.leerPropio) return [];
   return registros.filter((registro) => esDeLaSesion(registro, sesion));
 }
 

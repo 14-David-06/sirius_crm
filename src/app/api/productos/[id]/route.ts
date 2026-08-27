@@ -6,6 +6,7 @@ import {
   leerPrecio,
 } from "@/lib/productos";
 import { permisosDe } from "@/lib/permisos";
+import { ETIQUETAS, invalidar } from "@/lib/cache";
 import { getSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -50,7 +51,9 @@ export async function PATCH(
         );
       }
 
-      return NextResponse.json({ producto: await actualizarPrecio(id, precio, session.idEmpleado) });
+      const conPrecio = await actualizarPrecio(id, precio, session.idEmpleado);
+      invalidar(ETIQUETAS.productos);
+      return NextResponse.json({ producto: conPrecio });
     }
 
     if (body?.accion === "estado") {
@@ -61,9 +64,13 @@ export async function PATCH(
         );
       }
 
-      return NextResponse.json({
-        producto: await cambiarEstadoProducto(id, body.activo, session.idEmpleado),
-      });
+      const cambiado = await cambiarEstadoProducto(
+        id,
+        body.activo,
+        session.idEmpleado,
+      );
+      invalidar(ETIQUETAS.productos);
+      return NextResponse.json({ producto: cambiado });
     }
 
     return NextResponse.json({ error: "Acción inválida." }, { status: 400 });

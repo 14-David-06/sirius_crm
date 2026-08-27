@@ -8,7 +8,7 @@ import type { Caso } from "@/lib/casos";
 import type { Visita } from "@/lib/crm";
 import type { Producto } from "@/lib/productos";
 import { motivoSinAcceso, type Permisos } from "@/lib/permisos";
-import { RESULTADOS_VISITA, TIPOS_VISITA } from "@/lib/crm";
+import { RESULTADOS_VISITA, TIPOS_VISITA } from "@/lib/crm-comun";
 import {
   IconCalendar,
   IconFilter,

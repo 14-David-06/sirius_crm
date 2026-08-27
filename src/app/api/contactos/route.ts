@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { crearContacto, listarContactos } from "@/lib/clientes";
 import { permisosDe } from "@/lib/permisos";
+import { ETIQUETAS, invalidar } from "@/lib/cache";
 import { getSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -98,6 +99,7 @@ export async function POST(request: Request) {
       telefono: cadena(body.telefono) ?? undefined,
     });
 
+    invalidar(ETIQUETAS.contactos);
     return NextResponse.json({ contacto }, { status: 201 });
   } catch (error) {
     console.error("crear contacto", error);

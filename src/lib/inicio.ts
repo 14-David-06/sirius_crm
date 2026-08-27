@@ -186,8 +186,10 @@ export async function cargarInicio(
   // Todo lo que sigue se calcula sobre lo que esta sesión puede ver: si no
   // tiene alcance de equipo, los KPIs y los paneles hablan solo de lo suyo.
   if (!permisos.verTodo) {
-    visitas = visitas.filter((visita) => esDeLaSesion(visita, sesion));
-    casos = casos.filter((caso) => esDeLaSesion(caso, sesion));
+    const suyo = (registro: { idPersonalCore: string | null; responsable: string | null }) =>
+      permisos.leerPropio && esDeLaSesion(registro, sesion);
+    visitas = visitas.filter(suyo);
+    casos = casos.filter(suyo);
     // El maestro de clientes es dato de terceros: se recorta a la cartera que
     // esta persona efectivamente atendió, no al total de la compañía.
     clientes = clientes.filter((cliente) =>

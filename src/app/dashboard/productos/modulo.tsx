@@ -3,12 +3,12 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
+import type { Producto } from "@/lib/productos";
 import {
   CATEGORIAS_PRODUCTO,
   formatearPrecio,
   TIPOS_PRODUCTO,
-  type Producto,
-} from "@/lib/productos";
+} from "@/lib/productos-comun";
 import { IconFilter, IconPackage, IconPlus, IconSearch } from "../icons";
 import { FormularioProducto } from "./formulario-producto";
 

@@ -3,14 +3,14 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import type { Caso } from "@/lib/casos";
 import {
   ESTADOS_CASO,
   estaCerrado,
   TIPOS_CASO,
   type AlertaSla,
-  type Caso,
   type EstadoCaso,
-} from "@/lib/casos";
+} from "@/lib/casos-comun";
 import type { ClienteCore } from "@/lib/clientes";
 import {
   motivoSinAcceso,

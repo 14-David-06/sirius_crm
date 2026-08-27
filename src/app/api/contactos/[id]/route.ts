@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { actualizarDatosContacto, cambiarEstadoContacto } from "@/lib/clientes";
 import { permisosDe } from "@/lib/permisos";
+import { ETIQUETAS, invalidar } from "@/lib/cache";
 import { getSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -50,13 +51,13 @@ export async function PATCH(
         );
       }
 
-      return NextResponse.json({
-        contacto: await actualizarDatosContacto(
-          id,
-          { email, telefono },
-          session.idEmpleado,
-        ),
-      });
+      const actualizado = await actualizarDatosContacto(
+        id,
+        { email, telefono },
+        session.idEmpleado,
+      );
+      invalidar(ETIQUETAS.contactos);
+      return NextResponse.json({ contacto: actualizado });
     }
 
     if (body?.accion === "estado") {
@@ -67,9 +68,13 @@ export async function PATCH(
         );
       }
 
-      return NextResponse.json({
-        contacto: await cambiarEstadoContacto(id, body.activo, session.idEmpleado),
-      });
+      const cambiado = await cambiarEstadoContacto(
+        id,
+        body.activo,
+        session.idEmpleado,
+      );
+      invalidar(ETIQUETAS.contactos);
+      return NextResponse.json({ contacto: cambiado });
     }
 
     return NextResponse.json({ error: "Acción inválida." }, { status: 400 });

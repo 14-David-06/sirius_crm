@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+
+import { primerNombre } from "@/lib/validation";
 import { LogoSirius } from "../logo";
 
 type Paso = "cedula" | "password" | "crear-password";
@@ -268,10 +270,6 @@ export default function LoginPage() {
       </main>
     </div>
   );
-}
-
-function primerNombre(nombre: string): string {
-  return nombre.trim().split(/\s+/)[0] ?? "";
 }
 
 function MensajeError({ mensaje }: { mensaje: string | null }) {

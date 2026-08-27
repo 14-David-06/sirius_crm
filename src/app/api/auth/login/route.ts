@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 
 import { findPersonaByCedula } from "@/lib/airtable";
-import { resetAttempts, tooManyAttempts } from "@/lib/rate-limit";
+import { excedeIntentos, ipDe, olvidarIntentos } from "@/lib/rate-limit";
 import { createSession } from "@/lib/session";
 import { normalizeCedula } from "@/lib/validation";
 
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (tooManyAttempts(`login:${cedula}`)) {
+  if (await excedeIntentos("login", cedula, ipDe(request))) {
     return NextResponse.json(
       { error: "Demasiados intentos fallidos. Espera unos minutos." },
       { status: 429 },
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
       rol: persona.rol,
       nivelAcceso: persona.nivelAcceso,
     });
-    resetAttempts(`login:${cedula}`);
+    await olvidarIntentos("login", cedula);
 
     return NextResponse.json({ ok: true, nombre: persona.nombre });
   } catch (error) {

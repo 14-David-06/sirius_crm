@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 
 import { findPersonaByCedula, savePasswordHash } from "@/lib/airtable";
-import { tooManyAttempts } from "@/lib/rate-limit";
+import { excedeIntentos, ipDe } from "@/lib/rate-limit";
 import { createSession } from "@/lib/session";
 import { normalizeCedula, validatePassword } from "@/lib/validation";
 
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (tooManyAttempts(`set-password:${cedula}`)) {
+  if (await excedeIntentos("set-password", cedula, ipDe(request))) {
     return NextResponse.json(
       { error: "Demasiados intentos. Espera unos minutos." },
       { status: 429 },

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { findPersonaByCedula } from "@/lib/airtable";
-import { tooManyAttempts } from "@/lib/rate-limit";
-import { normalizeCedula } from "@/lib/validation";
+import { excedeIntentos, ipDe } from "@/lib/rate-limit";
+import { normalizeCedula, primerNombre } from "@/lib/validation";
 
 export const runtime = "nodejs";
 
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Cédula inválida." }, { status: 400 });
   }
 
-  if (tooManyAttempts(`lookup:${cedula}`)) {
+  if (await excedeIntentos("lookup", cedula, ipDe(request))) {
     return NextResponse.json(
       { error: "Demasiados intentos. Espera unos minutos." },
       { status: 429 },
@@ -42,7 +42,8 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({
-      nombre: persona.nombre,
+      // Solo el primer nombre: quien pregunta todavía no se ha autenticado.
+      nombre: primerNombre(persona.nombre),
       necesitaPassword: persona.passwordHash === null,
     });
   } catch (error) {

@@ -5,6 +5,12 @@ import {
   texto,
   type AirtableRecord,
 } from "@/lib/airtable";
+import { cachearLectura, ETIQUETAS } from "@/lib/cache";
+import type {
+  EstadoSeguimiento,
+  ResultadoVisita,
+  TipoVisita,
+} from "@/lib/crm-comun";
 import { env } from "@/lib/env";
 
 /**
@@ -35,19 +41,15 @@ export const CAMPOS_VISITA = {
 } as const;
 
 /** Listas desplegables: salen de la hoja "Listas" del Excel. */
-export const TIPOS_VISITA = ["Presencial", "Virtual", "Llamada"] as const;
-
-export const RESULTADOS_VISITA = [
-  "Interesado",
-  "Cotización enviada",
-  "Venta cerrada",
-  "Seguimiento pendiente",
-  "Sin interés por ahora",
-] as const;
-
-export type TipoVisita = (typeof TIPOS_VISITA)[number];
-export type ResultadoVisita = (typeof RESULTADOS_VISITA)[number];
-export type EstadoSeguimiento = "Atrasado" | "Hoy" | "Programado" | null;
+export {
+  RESULTADOS_VISITA,
+  TIPOS_VISITA,
+} from "@/lib/crm-comun";
+export type {
+  EstadoSeguimiento,
+  ResultadoVisita,
+  TipoVisita,
+} from "@/lib/crm-comun";
 
 export type Visita = {
   recordId: string;
@@ -101,11 +103,19 @@ function aVisita(record: AirtableRecord): Visita {
   };
 }
 
+const leerVisitas = cachearLectura(
+  "visitas",
+  ETIQUETAS.visitas,
+  async (): Promise<Visita[]> => {
+    const registros = await listarRegistros(env.baseCrm, env.tablaVisitas, {
+      sort: [{ field: CAMPOS_VISITA.fecha, direction: "desc" }],
+    });
+    return registros.map(aVisita);
+  },
+);
+
 export async function listarVisitas(): Promise<Visita[]> {
-  const registros = await listarRegistros(env.baseCrm, env.tablaVisitas, {
-    sort: [{ field: CAMPOS_VISITA.fecha, direction: "desc" }],
-  });
-  return registros.map(aVisita);
+  return leerVisitas();
 }
 
 /** Una visita por su recordId, para verificar de quién es antes de escribirla. */

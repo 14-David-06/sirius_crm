@@ -369,12 +369,13 @@ function construirMes(anio: number, mes: number): Celda[] {
   return celdas;
 }
 
-/** Ignora mayusculas y tildes: "Angelica" y "Angélica" son la misma persona. */
+/** Ignora mayusculas y tildes: "Jose" y "José" serian la misma persona. */
 const colador = new Intl.Collator("es", { sensitivity: "base" });
 
 /**
  * Airtable guarda el nombre escrito a mano, no el id del empleado, y suele
- * abreviar el apellido ("Angélica H."). Coincide el nombre y la inicial.
+ * abreviar el apellido ("Ana R." por "Ana Rodriguez"). Coincide el nombre y la
+ * inicial.
  */
 function mismaPersona(responsable: string | null, usuario: string): boolean {
   if (!responsable) return false;
