@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { actualizarDatosContacto, cambiarEstadoContacto } from "@/lib/clientes";
+import { permisosDe } from "@/lib/permisos";
 import { getSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -16,6 +17,13 @@ export async function PATCH(
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+  }
+
+  if (!permisosDe(session).gestionarCatalogo) {
+    return NextResponse.json(
+      { error: "Tu nivel de acceso no permite modificar los contactos." },
+      { status: 403 },
+    );
   }
 
   const { id } = await params;
@@ -43,7 +51,11 @@ export async function PATCH(
       }
 
       return NextResponse.json({
-        contacto: await actualizarDatosContacto(id, { email, telefono }),
+        contacto: await actualizarDatosContacto(
+          id,
+          { email, telefono },
+          session.idEmpleado,
+        ),
       });
     }
 
@@ -56,7 +68,7 @@ export async function PATCH(
       }
 
       return NextResponse.json({
-        contacto: await cambiarEstadoContacto(id, body.activo),
+        contacto: await cambiarEstadoContacto(id, body.activo, session.idEmpleado),
       });
     }
 

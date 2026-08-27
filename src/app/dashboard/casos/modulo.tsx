@@ -12,6 +12,11 @@ import {
   type EstadoCaso,
 } from "@/lib/casos";
 import type { ClienteCore } from "@/lib/clientes";
+import {
+  motivoSinAcceso,
+  puedeEditar,
+  type Permisos,
+} from "@/lib/permisos";
 import { formatearFecha } from "@/lib/fechas";
 import { IconAlert, IconFilter, IconPlus, IconSearch } from "../icons";
 import { FormularioCaso } from "./formulario-caso";
@@ -34,9 +39,10 @@ type Props = {
   casos: Caso[];
   clientes: ClienteCore[];
   visitas: VisitaOrigen[];
-  personal: { nombre: string; rol: string | null }[];
-  usuario: string;
+  personal: { nombre: string; rol: string | null; idEmpleado: string }[];
+  sesion: { idEmpleado: string; nombre: string };
   hoy: string;
+  permisos: Permisos;
 };
 
 export function ModuloCasos({
@@ -44,8 +50,9 @@ export function ModuloCasos({
   clientes,
   visitas,
   personal,
-  usuario,
+  sesion,
   hoy,
+  permisos,
 }: Props) {
   const [formularioAbierto, setFormularioAbierto] = useState(false);
   const [busqueda, setBusqueda] = useState("");
@@ -122,15 +129,23 @@ export function ModuloCasos({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setFormularioAbierto(true)}
-          className="flex cursor-pointer items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white transition-colors duration-200 hover:bg-blue-800 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none dark:bg-blue-600 dark:hover:bg-blue-500"
-        >
-          <IconPlus className="h-4 w-4" />
-          Abrir caso
-        </button>
+        {permisos.crear ? (
+          <button
+            type="button"
+            onClick={() => setFormularioAbierto(true)}
+            className="flex cursor-pointer items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white transition-colors duration-200 hover:bg-blue-800 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none dark:bg-blue-600 dark:hover:bg-blue-500"
+          >
+            <IconPlus className="h-4 w-4" />
+            Abrir caso
+          </button>
+        ) : null}
       </div>
+
+      {permisos.verTodo ? null : (
+        <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
+          {motivoSinAcceso(permisos)}
+        </p>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Resumen titulo="Sin resolver" valor={resumen.abiertos} />
@@ -222,7 +237,7 @@ export function ModuloCasos({
                 ? "Todavía no hay casos registrados. Abre el primero cuando un cliente deje un requerimiento."
                 : "Ningún caso coincide con estos filtros."}
             </p>
-            {casos.length === 0 ? (
+            {casos.length === 0 && permisos.crear ? (
               <button
                 type="button"
                 onClick={() => setFormularioAbierto(true)}
@@ -259,7 +274,12 @@ export function ModuloCasos({
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                 {ordenados.map((caso) => (
-                  <FilaCaso key={caso.recordId} caso={caso} hoy={hoy} />
+                  <FilaCaso
+                    key={caso.recordId}
+                    caso={caso}
+                    hoy={hoy}
+                    editable={puedeEditar(permisos, caso, sesion)}
+                  />
                 ))}
               </tbody>
             </table>
@@ -272,7 +292,7 @@ export function ModuloCasos({
           clientes={clientes}
           visitas={visitas}
           personal={personal}
-          usuario={usuario}
+          sesion={sesion}
           hoy={hoy}
           onCerrar={() => setFormularioAbierto(false)}
         />
@@ -281,7 +301,15 @@ export function ModuloCasos({
   );
 }
 
-function FilaCaso({ caso, hoy }: { caso: Caso; hoy: string }) {
+function FilaCaso({
+  caso,
+  hoy,
+  editable,
+}: {
+  caso: Caso;
+  hoy: string;
+  editable: boolean;
+}) {
   const router = useRouter();
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -368,6 +396,11 @@ function FilaCaso({ caso, hoy }: { caso: Caso; hoy: string }) {
         <EstadoCasoBadge estado={caso.estado} />
       </td>
       <td className="px-5 py-3 whitespace-nowrap">
+        {!editable ? (
+          <span className="text-xs text-slate-500 dark:text-slate-500">
+            solo lectura
+          </span>
+        ) : (
         <div className="flex items-center gap-1.5">
           {caso.estado === "Abierto" ? (
             <Accion
@@ -403,6 +436,7 @@ function FilaCaso({ caso, hoy }: { caso: Caso; hoy: string }) {
             </>
           )}
         </div>
+        )}
       </td>
     </tr>
   );

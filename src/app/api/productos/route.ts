@@ -15,6 +15,7 @@ import {
   type TipoProducto,
   type UnidadProducto,
 } from "@/lib/productos";
+import { permisosDe } from "@/lib/permisos";
 import { getSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -23,6 +24,13 @@ export async function GET() {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+  }
+
+  if (!permisosDe(session).verTodo) {
+    return NextResponse.json(
+      { error: "Tu nivel de acceso no permite consultar el catálogo." },
+      { status: 403 },
+    );
   }
 
   try {
@@ -40,6 +48,13 @@ export async function POST(request: Request) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+  }
+
+  if (!permisosDe(session).gestionarCatalogo) {
+    return NextResponse.json(
+      { error: "Tu nivel de acceso no permite modificar el catálogo." },
+      { status: 403 },
+    );
   }
 
   const body = (await request.json().catch(() => null)) as Record<
@@ -103,6 +118,7 @@ export async function POST(request: Request) {
   try {
     const producto = await crearProducto({
       nombre,
+      autorId: session.idEmpleado,
       categoria: categoria as CategoriaProducto,
       tipo: tipo as TipoProducto,
       unidad: unidad as UnidadProducto,

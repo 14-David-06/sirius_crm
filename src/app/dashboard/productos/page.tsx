@@ -2,8 +2,10 @@ import { redirect } from "next/navigation";
 
 import { listarVisitas } from "@/lib/crm";
 import { listarProductos } from "@/lib/productos";
+import { permisosDe } from "@/lib/permisos";
 import { getSession } from "@/lib/session";
 import { Shell } from "../shell";
+import { SinAcceso } from "../sin-acceso";
 import { ModuloProductos } from "./modulo";
 
 // El catálogo se edita desde esta misma vista: siempre se lee fresco.
@@ -14,6 +16,16 @@ export default async function ProductosPage() {
 
   if (!session) {
     redirect("/login");
+  }
+
+  // El maestro es dato de terceros: sin alcance de equipo no se lee siquiera.
+  const permisos = permisosDe(session);
+  if (!permisos.verTodo) {
+    return (
+      <Shell nombre={session.nombre} rol={session.rol} permisos={permisos}>
+        <SinAcceso modulo="Productos" permisos={permisos} />
+      </Shell>
+    );
   }
 
   const [productos, visitas] = await Promise.all([
@@ -59,7 +71,7 @@ export default async function ProductosPage() {
   }));
 
   return (
-    <Shell nombre={session.nombre} rol={session.rol}>
+    <Shell nombre={session.nombre} rol={session.rol} permisos={permisos}>
       <ModuloProductos filas={filas} />
     </Shell>
   );

@@ -2,6 +2,7 @@ import { armarPendientes, type Pendiente } from "@/lib/agenda";
 import { estaCerrado, listarCasos, type Caso } from "@/lib/casos";
 import { listarClientesCompletos } from "@/lib/clientes";
 import { hoyEnBogota, listarVisitas, type Visita } from "@/lib/crm";
+import { esDeLaSesion, type Permisos } from "@/lib/permisos";
 
 /**
  * Todo lo que el home muestra, calculado desde Airtable en una sola pasada.
@@ -79,6 +80,8 @@ export type Inicio = {
   hoy: string;
   /** True si Airtable falló: la vista lo dice en vez de mostrar ceros. */
   error: boolean;
+  /** True si la vista muestra solo los registros de la propia sesión. */
+  soloPropios: boolean;
 };
 
 const MESES_CORTOS = [
@@ -142,7 +145,10 @@ function esDelCliente(
   );
 }
 
-export async function cargarInicio(): Promise<Inicio> {
+export async function cargarInicio(
+  permisos: Permisos,
+  sesion: { idEmpleado: string; nombre: string },
+): Promise<Inicio> {
   const hoy = hoyEnBogota();
 
   const vacio: Inicio = {
@@ -159,6 +165,7 @@ export async function cargarInicio(): Promise<Inicio> {
     casosVencidos: 0,
     hoy,
     error: true,
+    soloPropios: !permisos.verTodo,
   };
 
   let visitas: Visita[];
@@ -174,6 +181,18 @@ export async function cargarInicio(): Promise<Inicio> {
   } catch (error) {
     console.error("cargar inicio", error);
     return vacio;
+  }
+
+  // Todo lo que sigue se calcula sobre lo que esta sesión puede ver: si no
+  // tiene alcance de equipo, los KPIs y los paneles hablan solo de lo suyo.
+  if (!permisos.verTodo) {
+    visitas = visitas.filter((visita) => esDeLaSesion(visita, sesion));
+    casos = casos.filter((caso) => esDeLaSesion(caso, sesion));
+    // El maestro de clientes es dato de terceros: se recorta a la cartera que
+    // esta persona efectivamente atendió, no al total de la compañía.
+    clientes = clientes.filter((cliente) =>
+      visitas.some((visita) => esDelCliente(visita, cliente)),
+    );
   }
 
   /* ------------------------------ Visitas ------------------------------- */
@@ -349,7 +368,7 @@ export async function cargarInicio(): Promise<Inicio> {
     },
     {
       id: "clientes",
-      titulo: "Clientes activos",
+      titulo: permisos.verTodo ? "Clientes activos" : "Clientes que atiendes",
       valor: String(activos.length),
       detalle:
         sinVisita === 0
@@ -374,5 +393,6 @@ export async function cargarInicio(): Promise<Inicio> {
     casosVencidos: casosVencidos.length,
     hoy,
     error: false,
+    soloPropios: !permisos.verTodo,
   };
 }

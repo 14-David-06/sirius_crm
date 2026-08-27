@@ -27,6 +27,8 @@ const CAMPOS_PRODUCTO = {
   observaciones: "Observaciones",
   activo: "Activo",
   creado: "Fecha Creacion",
+  creadoPor: "Creado Por ID",
+  modificadoPor: "Modificado Por ID",
 } as const;
 
 export const CATEGORIAS_PRODUCTO = [
@@ -74,6 +76,9 @@ export type Producto = {
   observaciones: string | null;
   activo: boolean;
   creado: string | null;
+  /** Auditoría: ID Empleado de quien lo creó y de quien lo tocó por última vez. */
+  creadoPor: string | null;
+  modificadoPor: string | null;
 };
 
 function numero(valor: unknown): number | null {
@@ -99,6 +104,8 @@ function aProducto(registro: AirtableRecord): Producto {
     // El campo es un select "Sí | No": solo "No" desactiva.
     activo: texto(f[CAMPOS_PRODUCTO.activo]) !== "No",
     creado: texto(f[CAMPOS_PRODUCTO.creado]),
+    creadoPor: texto(f[CAMPOS_PRODUCTO.creadoPor]),
+    modificadoPor: texto(f[CAMPOS_PRODUCTO.modificadoPor]),
   };
 }
 
@@ -124,6 +131,8 @@ export async function listarProductosActivos(): Promise<Producto[]> {
 
 export type EntradaProducto = {
   nombre: string;
+  /** ID Empleado de quien lo está creando. */
+  autorId: string;
   categoria: CategoriaProducto;
   tipo: TipoProducto;
   unidad: UnidadProducto;
@@ -147,6 +156,8 @@ export async function crearProducto(
     [CAMPOS_PRODUCTO.version]: entrada.version ?? "",
     [CAMPOS_PRODUCTO.observaciones]: entrada.observaciones ?? "",
     [CAMPOS_PRODUCTO.activo]: "Sí",
+    [CAMPOS_PRODUCTO.creadoPor]: entrada.autorId,
+    [CAMPOS_PRODUCTO.modificadoPor]: entrada.autorId,
   };
 
   // Los selects vacíos y el precio ausente se omiten en vez de mandarse en
@@ -173,12 +184,16 @@ export async function crearProducto(
 export async function actualizarPrecio(
   recordId: string,
   precio: number | null,
+  autorId: string,
 ): Promise<Producto> {
   const registro = await actualizarRegistro(
     env.baseProductos,
     env.tablaProductos,
     recordId,
-    { [CAMPOS_PRODUCTO.precio]: precio },
+    {
+      [CAMPOS_PRODUCTO.precio]: precio,
+      [CAMPOS_PRODUCTO.modificadoPor]: autorId,
+    },
   );
   return aProducto(registro);
 }
@@ -186,12 +201,16 @@ export async function actualizarPrecio(
 export async function cambiarEstadoProducto(
   recordId: string,
   activo: boolean,
+  autorId: string,
 ): Promise<Producto> {
   const registro = await actualizarRegistro(
     env.baseProductos,
     env.tablaProductos,
     recordId,
-    { [CAMPOS_PRODUCTO.activo]: activo ? "Sí" : "No" },
+    {
+      [CAMPOS_PRODUCTO.activo]: activo ? "Sí" : "No",
+      [CAMPOS_PRODUCTO.modificadoPor]: autorId,
+    },
   );
   return aProducto(registro);
 }

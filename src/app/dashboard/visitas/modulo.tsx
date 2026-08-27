@@ -7,6 +7,7 @@ import type { ClienteCore } from "@/lib/clientes";
 import type { Caso } from "@/lib/casos";
 import type { Visita } from "@/lib/crm";
 import type { Producto } from "@/lib/productos";
+import { motivoSinAcceso, type Permisos } from "@/lib/permisos";
 import { RESULTADOS_VISITA, TIPOS_VISITA } from "@/lib/crm";
 import {
   IconCalendar,
@@ -44,10 +45,11 @@ type Props = {
   casos: Caso[];
   clientes: ClienteCore[];
   productos: Producto[];
-  personal: { nombre: string; rol: string | null }[];
-  usuario: string;
+  personal: { nombre: string; rol: string | null; idEmpleado: string }[];
+  sesion: { idEmpleado: string; nombre: string };
   hoy: string;
   transcripcionDisponible: boolean;
+  permisos: Permisos;
 };
 
 export function ModuloVisitas({
@@ -56,9 +58,10 @@ export function ModuloVisitas({
   clientes,
   productos,
   personal,
-  usuario,
+  sesion,
   hoy,
   transcripcionDisponible,
+  permisos,
 }: Props) {
   const [vista, setVista] = useState<"lista" | "calendario">("lista");
   const [formularioAbierto, setFormularioAbierto] = useState(false);
@@ -82,15 +85,23 @@ export function ModuloVisitas({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setFormularioAbierto(true)}
-          className="flex cursor-pointer items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white transition-colors duration-200 hover:bg-blue-800 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none dark:bg-blue-600 dark:hover:bg-blue-500"
-        >
-          <IconPlus className="h-4 w-4" />
-          Registrar visita
-        </button>
+        {permisos.crear ? (
+          <button
+            type="button"
+            onClick={() => setFormularioAbierto(true)}
+            className="flex cursor-pointer items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white transition-colors duration-200 hover:bg-blue-800 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none dark:bg-blue-600 dark:hover:bg-blue-500"
+          >
+            <IconPlus className="h-4 w-4" />
+            Registrar visita
+          </button>
+        ) : null}
       </div>
+
+      {permisos.verTodo ? null : (
+        <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
+          {motivoSinAcceso(permisos)}
+        </p>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Resumen titulo="Visitas registradas" valor={visitas.length} />
@@ -130,7 +141,7 @@ export function ModuloVisitas({
           productos={productos}
           personal={personal}
           visitas={visitas}
-          usuario={usuario}
+          sesion={sesion}
           hoy={hoy}
           transcripcionDisponible={transcripcionDisponible}
           onCerrar={() => setFormularioAbierto(false)}

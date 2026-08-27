@@ -184,15 +184,21 @@ export async function savePasswordHash(
   });
 }
 
+export type PersonaActiva = {
+  nombre: string;
+  rol: string | null;
+  /** ID Empleado ("SIRIUS-PER-0021"): la clave con la que el CRM marca autoría. */
+  idEmpleado: string;
+};
+
 /** Personal activo, para el selector de responsable comercial. */
-export async function listarPersonalActivo(): Promise<
-  { nombre: string; rol: string | null }[]
-> {
+export async function listarPersonalActivo(): Promise<PersonaActiva[]> {
   const registros = await listarRegistros(env.baseNomina, env.tablaPersonal, {
     fields: [
       CAMPOS_PERSONAL.nombre,
       CAMPOS_PERSONAL.estado,
       CAMPOS_PERSONAL.rol,
+      CAMPOS_PERSONAL.idEmpleado,
     ],
     filterByFormula: `{${CAMPOS_PERSONAL.estado}} = 'Activo'`,
   });
@@ -201,7 +207,8 @@ export async function listarPersonalActivo(): Promise<
     .map((registro) => ({
       nombre: texto(registro.fields[CAMPOS_PERSONAL.nombre]) ?? "",
       rol: texto(registro.fields[CAMPOS_PERSONAL.rol]),
+      idEmpleado: texto(registro.fields[CAMPOS_PERSONAL.idEmpleado]) ?? "",
     }))
-    .filter((persona) => persona.nombre)
+    .filter((persona) => persona.nombre && persona.idEmpleado)
     .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
 }

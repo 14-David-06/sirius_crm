@@ -5,6 +5,7 @@ import { listarContactos, listarCultivos, obtenerCliente } from "@/lib/clientes"
 import { listarCasosPendientes } from "@/lib/casos";
 import { hoyEnBogota, listarVisitas } from "@/lib/crm";
 import { formatearFecha } from "@/lib/fechas";
+import { permisosDe } from "@/lib/permisos";
 import { getSession } from "@/lib/session";
 import {
   IconChevronLeft,
@@ -14,6 +15,7 @@ import {
   IconPlus,
 } from "../../icons";
 import { Shell } from "../../shell";
+import { SinAcceso } from "../../sin-acceso";
 import { Estado } from "../lista";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +34,17 @@ export default async function FichaClientePage({
 
   if (!session) {
     redirect("/login");
+  }
+
+  const permisos = permisosDe(session);
+
+  // La ficha completa de un cliente es dato de terceros.
+  if (!permisos.verTodo) {
+    return (
+      <Shell nombre={session.nombre} rol={session.rol} permisos={permisos}>
+        <SinAcceso modulo="La ficha de cliente" permisos={permisos} />
+      </Shell>
+    );
   }
 
   const { id } = await params;
@@ -81,7 +94,7 @@ export default async function FichaClientePage({
     .join(", ");
 
   return (
-    <Shell nombre={session.nombre} rol={session.rol}>
+    <Shell nombre={session.nombre} rol={session.rol} permisos={permisos}>
       <div className="mx-auto flex max-w-[100rem] flex-col gap-6">
         <div>
           <Link

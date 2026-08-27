@@ -24,20 +24,20 @@ type Formulario = {
   fechaApertura: string;
   tipo: TipoCaso;
   descripcion: string;
-  responsable: string;
+  responsableId: string;
   estado: "Abierto" | "En proceso";
   fechaLimite: string;
   observaciones: string;
   visitaOrigen: string;
 };
 
-function vacio(hoy: string, usuario: string): Formulario {
+function vacio(hoy: string, idEmpleado: string): Formulario {
   return {
     clienteId: "",
     fechaApertura: hoy,
     tipo: "Comercial",
     descripcion: "",
-    responsable: usuario,
+    responsableId: idEmpleado,
     estado: "Abierto",
     fechaLimite: "",
     observaciones: "",
@@ -49,21 +49,23 @@ export function FormularioCaso({
   clientes,
   visitas,
   personal,
-  usuario,
+  sesion,
   hoy,
   onCerrar,
 }: {
   clientes: ClienteCore[];
   visitas: VisitaOrigen[];
-  personal: { nombre: string; rol: string | null }[];
-  usuario: string;
+  personal: { nombre: string; rol: string | null; idEmpleado: string }[];
+  sesion: { idEmpleado: string; nombre: string };
   hoy: string;
   onCerrar: () => void;
 }) {
   const router = useRouter();
   const dialogoRef = useRef<HTMLDivElement>(null);
 
-  const [datos, setDatos] = useState<Formulario>(() => vacio(hoy, usuario));
+  const { idEmpleado, nombre: usuario } = sesion;
+
+  const [datos, setDatos] = useState<Formulario>(() => vacio(hoy, sesion.idEmpleado));
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -127,7 +129,7 @@ export function FormularioCaso({
         fechaApertura: datos.fechaApertura,
         tipo: datos.tipo,
         descripcion: datos.descripcion,
-        responsable: datos.responsable,
+        responsableId: datos.responsableId,
         estado: datos.estado,
         fechaLimite: datos.fechaLimite,
         observaciones: datos.observaciones,
@@ -265,19 +267,21 @@ export function FormularioCaso({
               <label htmlFor="caso-responsable" className={etiqueta}>
                 Responsable
               </label>
+              {/* Se envía el ID de empleado, no el nombre. */}
               <select
                 id="caso-responsable"
-                value={datos.responsable}
-                onChange={(e) => actualizar({ responsable: e.target.value })}
+                value={datos.responsableId}
+                onChange={(e) => actualizar({ responsableId: e.target.value })}
                 className={`${input} mt-1 cursor-pointer`}
               >
-                {/* El usuario puede no estar en la lista de personal activo. */}
-                {personal.some((p) => p.nombre === usuario) ? null : (
-                  <option value={usuario}>{usuario}</option>
+                {/* La sesión puede no estar en el personal activo. */}
+                {personal.some((p) => p.idEmpleado === idEmpleado) ? null : (
+                  <option value="">{usuario} (tú)</option>
                 )}
                 {personal.map((p) => (
-                  <option key={p.nombre} value={p.nombre}>
+                  <option key={p.idEmpleado} value={p.idEmpleado}>
                     {p.nombre}
+                    {p.idEmpleado === idEmpleado ? " (tú)" : ""}
                   </option>
                 ))}
               </select>

@@ -36,6 +36,8 @@ const CAMPOS_CONTACTO = {
   telefono: "Teléfono",
   cliente: "Cliente",
   estado: "Estado Personal",
+  creadoPor: "Creado Por ID",
+  modificadoPor: "Modificado Por ID",
 } as const;
 
 const CAMPOS_CULTIVO = {
@@ -75,6 +77,9 @@ export type ContactoCliente = {
   telefono: string | null;
   activo: boolean;
   clientes: string[];
+  /** Auditoría: ID Empleado de quien lo creó y de quien lo tocó por última vez. */
+  creadoPor: string | null;
+  modificadoPor: string | null;
 };
 
 export type CultivoCliente = {
@@ -174,6 +179,8 @@ export async function listarContactos(): Promise<ContactoCliente[]> {
 export type EntradaContacto = {
   nombre: string;
   cliente: string;
+  /** ID Empleado de quien lo está creando. */
+  autorId: string;
   cargo?: string;
   cedula?: string;
   email?: string;
@@ -194,6 +201,8 @@ function aContacto(registro: AirtableRecord): ContactoCliente {
     telefono: texto(f[CAMPOS_CONTACTO.telefono]),
     activo: texto(f[CAMPOS_CONTACTO.estado]) !== "Inactivo",
     clientes: vinculos(f[CAMPOS_CONTACTO.cliente]),
+    creadoPor: texto(f[CAMPOS_CONTACTO.creadoPor]),
+    modificadoPor: texto(f[CAMPOS_CONTACTO.modificadoPor]),
   };
 }
 
@@ -212,6 +221,8 @@ export async function crearContacto(
       [CAMPOS_CONTACTO.emailNotificacion]: entrada.emailNotificacion ?? "",
       [CAMPOS_CONTACTO.telefono]: entrada.telefono ?? "",
       [CAMPOS_CONTACTO.estado]: "Activo",
+      [CAMPOS_CONTACTO.creadoPor]: entrada.autorId,
+      [CAMPOS_CONTACTO.modificadoPor]: entrada.autorId,
     },
   );
   return aContacto(registro);
@@ -221,6 +232,7 @@ export async function crearContacto(
 export async function actualizarDatosContacto(
   recordId: string,
   datos: { email: string | null; telefono: string | null },
+  autorId: string,
 ): Promise<ContactoCliente> {
   const registro = await actualizarRegistro(
     env.baseClientes,
@@ -229,6 +241,7 @@ export async function actualizarDatosContacto(
     {
       [CAMPOS_CONTACTO.email]: datos.email ?? "",
       [CAMPOS_CONTACTO.telefono]: datos.telefono ?? "",
+      [CAMPOS_CONTACTO.modificadoPor]: autorId,
     },
   );
   return aContacto(registro);
@@ -237,12 +250,16 @@ export async function actualizarDatosContacto(
 export async function cambiarEstadoContacto(
   recordId: string,
   activo: boolean,
+  autorId: string,
 ): Promise<ContactoCliente> {
   const registro = await actualizarRegistro(
     env.baseClientes,
     env.tablaPersonalCliente,
     recordId,
-    { [CAMPOS_CONTACTO.estado]: activo ? "Activo" : "Inactivo" },
+    {
+      [CAMPOS_CONTACTO.estado]: activo ? "Activo" : "Inactivo",
+      [CAMPOS_CONTACTO.modificadoPor]: autorId,
+    },
   );
   return aContacto(registro);
 }

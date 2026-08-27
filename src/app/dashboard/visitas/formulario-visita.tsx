@@ -34,7 +34,7 @@ const OBJETIVOS_FRECUENTES = [
 type Formulario = {
   clienteId: string;
   fecha: string;
-  responsable: string;
+  responsableId: string;
   tipo: string;
   objetivo: string;
   necesidad: string;
@@ -50,26 +50,29 @@ export function FormularioVisita({
   productos,
   personal,
   visitas,
-  usuario,
+  sesion,
   hoy,
   transcripcionDisponible,
   onCerrar,
 }: {
   clientes: ClienteCore[];
   productos: Producto[];
-  personal: { nombre: string; rol: string | null }[];
+  personal: { nombre: string; rol: string | null; idEmpleado: string }[];
   visitas: Visita[];
-  usuario: string;
+  sesion: { idEmpleado: string; nombre: string };
   hoy: string;
   transcripcionDisponible: boolean;
   onCerrar: () => void;
 }) {
   const router = useRouter();
+  const { idEmpleado, nombre: usuario } = sesion;
 
   const inicial: Formulario = {
     clienteId: "",
     fecha: hoy,
-    responsable: usuario,
+    // Arranca en la propia sesión: si quedara vacío, el select mostraría a
+    // otra persona mientras el estado dice "".
+    responsableId: idEmpleado,
     tipo: "Presencial",
     objetivo: "",
     necesidad: "",
@@ -83,7 +86,10 @@ export function FormularioVisita({
   // El borrador se lee una sola vez, al construir el estado, para no
   // disparar un render en cascada desde un efecto.
   const [borrador] = useState(() => leerBorrador(inicial));
-  const [datos, setDatos] = useState<Formulario>(borrador ?? inicial);
+
+  const [datos, setDatos] = useState<Formulario>(
+    borrador ? { ...inicial, ...borrador, responsableId: idEmpleado } : inicial,
+  );
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -194,7 +200,7 @@ export function FormularioVisita({
   }
 
   function limpiar() {
-    setDatos({ ...inicial, fecha: hoy, responsable: usuario });
+    setDatos({ ...inicial, fecha: hoy, responsableId: idEmpleado });
     setInterpretado(null);
     setBorradorRestaurado(false);
     try {
@@ -226,7 +232,7 @@ export function FormularioVisita({
         idClienteCore: cliente.id,
         cliente: cliente.nombre,
         fecha: datos.fecha,
-        responsable: datos.responsable,
+        responsableId: datos.responsableId,
         tipo: datos.tipo,
         objetivo: datos.objetivo,
         necesidad: datos.necesidad,
@@ -395,18 +401,24 @@ export function FormularioVisita({
             </Campo>
 
             <Campo etiqueta="Responsable comercial" htmlFor="responsable">
-              <input
+              {/* Se envía el ID de empleado, no el nombre: dos personas pueden
+                  llamarse igual y el nombre puede escribirse distinto. */}
+              <select
                 id="responsable"
-                list="personal-sirius"
-                value={datos.responsable}
-                onChange={(e) => actualizar({ responsable: e.target.value })}
-                className={input}
-              />
-              <datalist id="personal-sirius">
+                value={datos.responsableId}
+                onChange={(e) => actualizar({ responsableId: e.target.value })}
+                className={`${input} cursor-pointer`}
+              >
+                {personal.some((p) => p.idEmpleado === idEmpleado) ? null : (
+                  <option value="">{usuario} (tú)</option>
+                )}
                 {personal.map((p) => (
-                  <option key={p.nombre} value={p.nombre} />
+                  <option key={p.idEmpleado} value={p.idEmpleado}>
+                    {p.nombre}
+                    {p.idEmpleado === idEmpleado ? " (tú)" : ""}
+                  </option>
                 ))}
-              </datalist>
+              </select>
             </Campo>
 
             <Campo etiqueta="Tipo de visita" htmlFor="tipo" obligatorio>

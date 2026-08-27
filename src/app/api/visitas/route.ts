@@ -8,6 +8,8 @@ import {
   type ResultadoVisita,
   type TipoVisita,
 } from "@/lib/crm";
+import { esErrorAutoria, resolverAutoria } from "@/lib/autoria";
+import { filtrarPorAlcance, permisosDe } from "@/lib/permisos";
 import { getSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -20,8 +22,13 @@ export async function GET() {
     return NextResponse.json({ error: "No autorizado." }, { status: 401 });
   }
 
+  const permisos = permisosDe(session);
+
   try {
-    return NextResponse.json({ visitas: await listarVisitas() });
+    const visitas = await listarVisitas();
+    return NextResponse.json({
+      visitas: filtrarPorAlcance(visitas, permisos, session),
+    });
   } catch (error) {
     console.error("listar visitas", error);
     return NextResponse.json(
@@ -35,6 +42,14 @@ export async function POST(request: Request) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+  }
+
+  const permisos = permisosDe(session);
+  if (!permisos.crear) {
+    return NextResponse.json(
+      { error: "Tu nivel de acceso no permite registrar visitas." },
+      { status: 403 },
+    );
   }
 
   const body = (await request.json().catch(() => null)) as Record<
@@ -102,12 +117,25 @@ export async function POST(request: Request) {
     );
   }
 
+  const autoria = await resolverAutoria(session, permisos, {
+    id: cadena(body.responsableId),
+    nombre: cadena(body.responsable),
+  });
+  if (esErrorAutoria(autoria)) {
+    return NextResponse.json(
+      { error: autoria.error },
+      { status: autoria.status },
+    );
+  }
+
   try {
     const visita = await crearVisita({
       idClienteCore: cadena(body.idClienteCore),
       cliente,
       fecha,
-      responsable: cadena(body.responsable) ?? session.nombre,
+      responsable: autoria.responsable,
+      idPersonalCore: autoria.idPersonalCore,
+      autorId: session.idEmpleado,
       tipo: tipo as TipoVisita,
       objetivo,
       necesidad: cadena(body.necesidad) ?? undefined,

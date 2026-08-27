@@ -9,6 +9,8 @@ import {
   type EstadoCaso,
   type TipoCaso,
 } from "@/lib/casos";
+import { esErrorAutoria, resolverAutoria } from "@/lib/autoria";
+import { filtrarPorAlcance, permisosDe } from "@/lib/permisos";
 import { getSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -22,8 +24,13 @@ export async function GET() {
     return NextResponse.json({ error: "No autorizado." }, { status: 401 });
   }
 
+  const permisos = permisosDe(session);
+
   try {
-    return NextResponse.json({ casos: await listarCasos() });
+    const casos = await listarCasos();
+    return NextResponse.json({
+      casos: filtrarPorAlcance(casos, permisos, session),
+    });
   } catch (error) {
     console.error("listar casos", error);
     return NextResponse.json(
@@ -37,6 +44,14 @@ export async function POST(request: Request) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+  }
+
+  const permisos = permisosDe(session);
+  if (!permisos.crear) {
+    return NextResponse.json(
+      { error: "Tu nivel de acceso no permite abrir casos." },
+      { status: 403 },
+    );
   }
 
   const body = (await request.json().catch(() => null)) as Record<
@@ -106,6 +121,17 @@ export async function POST(request: Request) {
     );
   }
 
+  const autoria = await resolverAutoria(session, permisos, {
+    id: cadena(body.responsableId),
+    nombre: cadena(body.responsable),
+  });
+  if (esErrorAutoria(autoria)) {
+    return NextResponse.json(
+      { error: autoria.error },
+      { status: autoria.status },
+    );
+  }
+
   try {
     const caso = await crearCaso({
       idClienteCore: cadena(body.idClienteCore),
@@ -113,7 +139,9 @@ export async function POST(request: Request) {
       fechaApertura,
       tipo: tipo as TipoCaso,
       descripcion,
-      responsable: cadena(body.responsable) ?? session.nombre,
+      responsable: autoria.responsable,
+      idPersonalCore: autoria.idPersonalCore,
+      autorId: session.idEmpleado,
       estado: estado as EstadoCaso,
       fechaLimite: fechaLimite ?? undefined,
       observaciones: cadena(body.observaciones) ?? undefined,

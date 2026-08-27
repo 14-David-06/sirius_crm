@@ -19,6 +19,8 @@ export const CAMPOS_VISITA = {
   cliente: "Cliente",
   fecha: "Fecha Visita",
   responsable: "Responsable Comercial",
+  idPersonalCore: "ID Personal Core",
+  modificadoPor: "Modificado Por ID",
   tipo: "Tipo de Visita",
   objetivo: "Objetivo de la Visita",
   necesidad: "Necesidad o Diagnóstico",
@@ -54,6 +56,10 @@ export type Visita = {
   cliente: string;
   fecha: string | null;
   responsable: string | null;
+  /** ID Empleado de quien la registró; es la clave de propiedad. */
+  idPersonalCore: string | null;
+  /** ID Empleado de quien la modificó por última vez desde el CRM. */
+  modificadoPor: string | null;
   tipo: string | null;
   objetivo: string | null;
   necesidad: string | null;
@@ -77,6 +83,8 @@ function aVisita(record: AirtableRecord): Visita {
     cliente: texto(f[CAMPOS_VISITA.cliente]) ?? "Sin cliente",
     fecha: texto(f[CAMPOS_VISITA.fecha]),
     responsable: texto(f[CAMPOS_VISITA.responsable]),
+    idPersonalCore: texto(f[CAMPOS_VISITA.idPersonalCore]),
+    modificadoPor: texto(f[CAMPOS_VISITA.modificadoPor]),
     tipo: texto(f[CAMPOS_VISITA.tipo]),
     objetivo: texto(f[CAMPOS_VISITA.objetivo]),
     necesidad: texto(f[CAMPOS_VISITA.necesidad]),
@@ -100,11 +108,25 @@ export async function listarVisitas(): Promise<Visita[]> {
   return registros.map(aVisita);
 }
 
+/** Una visita por su recordId, para verificar de quién es antes de escribirla. */
+export async function obtenerVisita(recordId: string): Promise<Visita | null> {
+  const registros = await listarRegistros(env.baseCrm, env.tablaVisitas, {
+    filterByFormula: `RECORD_ID() = '${recordId}'`,
+    maxRecords: 1,
+  });
+
+  return registros[0] ? aVisita(registros[0]) : null;
+}
+
 export type EntradaVisita = {
   idClienteCore: string | null;
   cliente: string;
   fecha: string;
   responsable: string;
+  /** ID Empleado del dueño de la visita. */
+  idPersonalCore: string;
+  /** ID Empleado de quien la está registrando (puede no ser el dueño). */
+  autorId: string;
   tipo: TipoVisita;
   objetivo: string;
   necesidad?: string;
@@ -122,6 +144,8 @@ export async function crearVisita(entrada: EntradaVisita): Promise<Visita> {
     [CAMPOS_VISITA.cliente]: entrada.cliente,
     [CAMPOS_VISITA.fecha]: entrada.fecha,
     [CAMPOS_VISITA.responsable]: entrada.responsable,
+    [CAMPOS_VISITA.idPersonalCore]: entrada.idPersonalCore,
+    [CAMPOS_VISITA.modificadoPor]: entrada.autorId,
     [CAMPOS_VISITA.tipo]: entrada.tipo,
     [CAMPOS_VISITA.objetivo]: entrada.objetivo,
     [CAMPOS_VISITA.necesidad]: entrada.necesidad ?? "",
@@ -143,12 +167,16 @@ export async function crearVisita(entrada: EntradaVisita): Promise<Visita> {
 export async function reprogramarSeguimiento(
   recordId: string,
   fecha: string,
+  autorId: string,
 ): Promise<Visita> {
   const record = await actualizarRegistro(
     env.baseCrm,
     env.tablaVisitas,
     recordId,
-    { [CAMPOS_VISITA.fechaSeguimiento]: fecha },
+    {
+      [CAMPOS_VISITA.fechaSeguimiento]: fecha,
+      [CAMPOS_VISITA.modificadoPor]: autorId,
+    },
   );
   return aVisita(record);
 }
@@ -162,6 +190,7 @@ export async function cerrarSeguimiento(
   nota: string,
   observacionesActuales: string | null,
   hoy: string,
+  autorId: string,
 ): Promise<Visita> {
   const traza = `[${hoy}] Seguimiento cumplido: ${nota}`.trim();
   const observaciones = observacionesActuales
@@ -175,6 +204,7 @@ export async function cerrarSeguimiento(
     {
       [CAMPOS_VISITA.fechaSeguimiento]: null,
       [CAMPOS_VISITA.observaciones]: observaciones,
+      [CAMPOS_VISITA.modificadoPor]: autorId,
     },
   );
   return aVisita(record);

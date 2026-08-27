@@ -2,8 +2,10 @@ import { redirect } from "next/navigation";
 
 import { listarClientesCompletos, listarContactos } from "@/lib/clientes";
 import { hoyEnBogota, listarVisitas } from "@/lib/crm";
+import { permisosDe } from "@/lib/permisos";
 import { getSession } from "@/lib/session";
 import { Shell } from "../shell";
+import { SinAcceso } from "../sin-acceso";
 import { ListaClientes, type FilaCliente } from "./lista";
 
 // El maestro de clientes cambia durante el día: siempre se lee fresco.
@@ -14,6 +16,16 @@ export default async function ClientesPage() {
 
   if (!session) {
     redirect("/login");
+  }
+
+  // El maestro es dato de terceros: sin alcance de equipo no se lee siquiera.
+  const permisos = permisosDe(session);
+  if (!permisos.verTodo) {
+    return (
+      <Shell nombre={session.nombre} rol={session.rol} permisos={permisos}>
+        <SinAcceso modulo="Clientes" permisos={permisos} />
+      </Shell>
+    );
   }
 
   const [clientes, contactos, visitas] = await Promise.all([
@@ -67,7 +79,7 @@ export default async function ClientesPage() {
   });
 
   return (
-    <Shell nombre={session.nombre} rol={session.rol}>
+    <Shell nombre={session.nombre} rol={session.rol} permisos={permisos}>
       <ListaClientes filas={filas} />
     </Shell>
   );

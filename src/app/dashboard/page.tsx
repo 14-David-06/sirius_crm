@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { formatearFecha } from "@/lib/fechas";
 import { cargarInicio } from "@/lib/inicio";
+import { permisosDe } from "@/lib/permisos";
 import { getSession } from "@/lib/session";
 import { CalendarioPendientes } from "./calendario";
 import { Shell } from "./shell";
@@ -26,10 +27,14 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const inicio = await cargarInicio();
+  const permisos = permisosDe(session);
+  const inicio = await cargarInicio(permisos, {
+    idEmpleado: session.idEmpleado,
+    nombre: session.nombre,
+  });
 
   return (
-    <Shell nombre={session.nombre} rol={session.rol}>
+    <Shell nombre={session.nombre} rol={session.rol} permisos={permisos}>
       <div className="mx-auto flex max-w-[100rem] flex-col gap-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -42,6 +47,7 @@ export default async function DashboardPage() {
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-500">
             Datos al {formatearFecha(inicio.hoy)}
+            {inicio.soloPropios ? " · solo tus registros" : ""}
           </p>
         </div>
 

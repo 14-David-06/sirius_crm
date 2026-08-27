@@ -3,8 +3,10 @@ import { NextResponse } from "next/server";
 import {
   cerrarSeguimiento,
   hoyEnBogota,
+  obtenerVisita,
   reprogramarSeguimiento,
 } from "@/lib/crm";
+import { permisosDe, puedeEditar } from "@/lib/permisos";
 import { getSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -27,6 +29,21 @@ export async function PATCH(
     return NextResponse.json({ error: "Visita inválida." }, { status: 400 });
   }
 
+  // El permiso se resuelve contra el registro real de Airtable.
+  const visita = await obtenerVisita(id);
+  if (!visita) {
+    return NextResponse.json({ error: "La visita no existe." }, { status: 404 });
+  }
+  if (!puedeEditar(permisosDe(session), visita, session)) {
+    return NextResponse.json(
+      {
+        error:
+          "Esta visita no está a tu nombre y tu nivel no permite editarla.",
+      },
+      { status: 403 },
+    );
+  }
+
   const body = (await request.json().catch(() => null)) as {
     accion?: unknown;
     fecha?: unknown;
@@ -41,7 +58,7 @@ export async function PATCH(
         return NextResponse.json({ error: "Fecha inválida." }, { status: 400 });
       }
       return NextResponse.json({
-        visita: await reprogramarSeguimiento(id, fecha),
+        visita: await reprogramarSeguimiento(id, fecha, session.idEmpleado),
       });
     }
 
@@ -54,7 +71,13 @@ export async function PATCH(
         typeof body.observaciones === "string" ? body.observaciones : null;
 
       return NextResponse.json({
-        visita: await cerrarSeguimiento(id, nota, observaciones, hoyEnBogota()),
+        visita: await cerrarSeguimiento(
+          id,
+          nota,
+          observaciones,
+          hoyEnBogota(),
+          session.idEmpleado,
+        ),
       });
     }
 

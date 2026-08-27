@@ -4,6 +4,7 @@ import { listarPersonalActivo } from "@/lib/airtable";
 import { listarCasos } from "@/lib/casos";
 import { listarClientes } from "@/lib/clientes";
 import { hoyEnBogota, listarVisitas } from "@/lib/crm";
+import { filtrarPorAlcance, permisosDe } from "@/lib/permisos";
 import { getSession } from "@/lib/session";
 import { Shell } from "../shell";
 import { ModuloCasos } from "./modulo";
@@ -25,8 +26,13 @@ export default async function CasosPage() {
     listarPersonalActivo(),
   ]);
 
-  // El selector de visita de origen solo necesita lo justo para identificarla.
-  const origenes = visitas.map((visita) => ({
+  const permisos = permisosDe(session);
+  const mios = filtrarPorAlcance(casos, permisos, session);
+
+  // El selector de visita de origen solo necesita lo justo para identificarla,
+  // y solo puede ofrecer visitas que esta sesión tiene permitido ver.
+  const origenes = filtrarPorAlcance(visitas, permisos, session).map(
+    (visita) => ({
     recordId: visita.recordId,
     idClienteCore: visita.idClienteCore,
     cliente: visita.cliente,
@@ -34,15 +40,23 @@ export default async function CasosPage() {
     objetivo: visita.objetivo,
   }));
 
+  const elegibles = permisos.verTodo
+    ? personal
+    : personal.filter((p) => p.idEmpleado === session.idEmpleado);
+
   return (
-    <Shell nombre={session.nombre} rol={session.rol}>
+    <Shell nombre={session.nombre} rol={session.rol} permisos={permisos}>
       <ModuloCasos
-        casos={casos}
+        casos={mios}
         clientes={clientes}
         visitas={origenes}
-        personal={personal}
-        usuario={session.nombre}
+        personal={elegibles}
+        sesion={{
+          idEmpleado: session.idEmpleado,
+          nombre: session.nombre,
+        }}
         hoy={hoyEnBogota()}
+        permisos={permisos}
       />
     </Shell>
   );

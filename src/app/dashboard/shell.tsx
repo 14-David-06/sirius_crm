@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
+import type { Permisos } from "@/lib/permisos";
 import { LogoSirius } from "../logo";
 import { BotonSalir } from "./boton-salir";
 import {
@@ -34,6 +35,8 @@ type ItemNav = {
   contador?: number;
   /** Solo los módulos ya construidos tienen ruta; el resto va deshabilitado. */
   href?: string;
+  /** True si el módulo muestra datos de terceros y exige alcance de equipo. */
+  deEquipo?: boolean;
 };
 
 const grupos: { titulo: string; items: ItemNav[] }[] = [
@@ -43,12 +46,14 @@ const grupos: { titulo: string; items: ItemNav[] }[] = [
       { id: "inicio", etiqueta: "Inicio", Icono: IconHome, href: "/dashboard" },
       {
         id: "clientes",
+        deEquipo: true,
         etiqueta: "Clientes",
         Icono: IconBuilding,
         href: "/dashboard/clientes",
       },
       {
         id: "contactos",
+        deEquipo: true,
         etiqueta: "Contactos",
         Icono: IconUsers,
         href: "/dashboard/contactos",
@@ -69,6 +74,7 @@ const grupos: { titulo: string; items: ItemNav[] }[] = [
       { id: "pedidos", etiqueta: "Pedidos", Icono: IconCart },
       {
         id: "productos",
+        deEquipo: true,
         etiqueta: "Productos",
         Icono: IconPackage,
         href: "/dashboard/productos",
@@ -95,10 +101,12 @@ const grupos: { titulo: string; items: ItemNav[] }[] = [
 export function Shell({
   nombre,
   rol,
+  permisos,
   children,
 }: {
   nombre: string;
   rol: string | null;
+  permisos: Permisos;
   children: React.ReactNode;
 }) {
   const [menuAbierto, setMenuAbierto] = useState(false);
@@ -115,7 +123,11 @@ export function Shell({
         />
       ) : null}
 
-      <Sidebar abierto={menuAbierto} onCerrar={() => setMenuAbierto(false)} />
+      <Sidebar
+        abierto={menuAbierto}
+        permisos={permisos}
+        onCerrar={() => setMenuAbierto(false)}
+      />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar
@@ -133,12 +145,23 @@ export function Shell({
 
 function Sidebar({
   abierto,
+  permisos,
   onCerrar,
 }: {
   abierto: boolean;
+  permisos: Permisos;
   onCerrar: () => void;
 }) {
   const pathname = usePathname();
+
+  // No se ofrecen puertas que no abren: sin alcance de equipo, los módulos de
+  // datos de terceros no aparecen en el menú.
+  const visibles = grupos
+    .map((grupo) => ({
+      ...grupo,
+      items: grupo.items.filter((item) => permisos.verTodo || !item.deEquipo),
+    }))
+    .filter((grupo) => grupo.items.length > 0);
 
   return (
     <aside
@@ -166,7 +189,7 @@ function Sidebar({
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label="Principal">
-        {grupos.map((grupo) => (
+        {visibles.map((grupo) => (
           <div key={grupo.titulo} className="mb-6">
             <p className="px-3 pb-2 text-[10px] font-semibold tracking-[0.12em] text-slate-400 uppercase dark:text-slate-500">
               {grupo.titulo}

@@ -5,6 +5,7 @@ import {
   cambiarEstadoProducto,
   leerPrecio,
 } from "@/lib/productos";
+import { permisosDe } from "@/lib/permisos";
 import { getSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -19,6 +20,13 @@ export async function PATCH(
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+  }
+
+  if (!permisosDe(session).gestionarCatalogo) {
+    return NextResponse.json(
+      { error: "Tu nivel de acceso no permite modificar el catálogo." },
+      { status: 403 },
+    );
   }
 
   const { id } = await params;
@@ -42,7 +50,7 @@ export async function PATCH(
         );
       }
 
-      return NextResponse.json({ producto: await actualizarPrecio(id, precio) });
+      return NextResponse.json({ producto: await actualizarPrecio(id, precio, session.idEmpleado) });
     }
 
     if (body?.accion === "estado") {
@@ -54,7 +62,7 @@ export async function PATCH(
       }
 
       return NextResponse.json({
-        producto: await cambiarEstadoProducto(id, body.activo),
+        producto: await cambiarEstadoProducto(id, body.activo, session.idEmpleado),
       });
     }
 

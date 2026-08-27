@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { permisosDe } from "@/lib/permisos";
 import { getSession } from "@/lib/session";
 import {
   TAMANO_MAXIMO_AUDIO,
@@ -14,6 +15,14 @@ export async function POST(request: Request) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+  }
+
+  // El dictado solo sirve para registrar visitas: mismo permiso que crearlas.
+  if (!permisosDe(session).crear) {
+    return NextResponse.json(
+      { error: "Tu nivel de acceso no permite registrar visitas." },
+      { status: 403 },
+    );
   }
 
   if (!transcripcionConfigurada()) {

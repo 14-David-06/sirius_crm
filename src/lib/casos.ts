@@ -21,6 +21,8 @@ const CAMPOS_CASO = {
   tipo: "Tipo de Requerimiento",
   descripcion: "Descripción",
   responsable: "Responsable",
+  idPersonalCore: "ID Personal Core",
+  modificadoPor: "Modificado Por ID",
   estado: "Estado",
   fechaLimite: "Fecha Límite",
   fechaCierre: "Fecha de Cierre",
@@ -63,6 +65,10 @@ export type Caso = {
   tipo: string | null;
   descripcion: string | null;
   responsable: string | null;
+  /** ID Empleado de quien lo abrió; es la clave de propiedad. */
+  idPersonalCore: string | null;
+  /** ID Empleado de quien lo modificó por última vez desde el CRM. */
+  modificadoPor: string | null;
   estado: string | null;
   fechaLimite: string | null;
   fechaCierre: string | null;
@@ -124,6 +130,8 @@ function aCaso(
     tipo: texto(f[CAMPOS_CASO.tipo]),
     descripcion: texto(f[CAMPOS_CASO.descripcion]),
     responsable: texto(f[CAMPOS_CASO.responsable]),
+    idPersonalCore: texto(f[CAMPOS_CASO.idPersonalCore]),
+    modificadoPor: texto(f[CAMPOS_CASO.modificadoPor]),
     estado,
     fechaLimite,
     fechaCierre: soloDia(f[CAMPOS_CASO.fechaCierre]),
@@ -144,6 +152,17 @@ export async function listarCasos(): Promise<Caso[]> {
   return registros.map((registro) => aCaso(registro, hoy));
 }
 
+/** Un caso por su recordId, para verificar de quién es antes de escribirlo. */
+export async function obtenerCaso(recordId: string): Promise<Caso | null> {
+  const registros = await listarRegistros(env.baseCrm, env.tablaCasos, {
+    fields: Object.values(CAMPOS_CASO),
+    filterByFormula: `RECORD_ID() = '${recordId}'`,
+    maxRecords: 1,
+  });
+
+  return registros[0] ? aCaso(registros[0], hoyEnBogota()) : null;
+}
+
 /** Casos abiertos con fecha límite: los que el calendario del home muestra. */
 export async function listarCasosPendientes(): Promise<Caso[]> {
   const casos = await listarCasos();
@@ -157,6 +176,10 @@ export type EntradaCaso = {
   tipo: TipoCaso;
   descripcion: string;
   responsable: string;
+  /** ID Empleado del dueño del caso. */
+  idPersonalCore: string;
+  /** ID Empleado de quien lo está abriendo (puede no ser el dueño). */
+  autorId: string;
   estado: EstadoCaso;
   fechaLimite?: string;
   observaciones?: string;
@@ -171,6 +194,8 @@ export async function crearCaso(entrada: EntradaCaso): Promise<Caso> {
     [CAMPOS_CASO.tipo]: entrada.tipo,
     [CAMPOS_CASO.descripcion]: entrada.descripcion,
     [CAMPOS_CASO.responsable]: entrada.responsable,
+    [CAMPOS_CASO.idPersonalCore]: entrada.idPersonalCore,
+    [CAMPOS_CASO.modificadoPor]: entrada.autorId,
     [CAMPOS_CASO.estado]: entrada.estado,
     [CAMPOS_CASO.observaciones]: entrada.observaciones ?? "",
   };
@@ -195,10 +220,12 @@ export async function cambiarEstadoCaso(
   recordId: string,
   estado: EstadoCaso,
   observaciones: string | null,
+  autorId: string,
 ): Promise<Caso> {
   const fields: Record<string, unknown> = {
     [CAMPOS_CASO.estado]: estado,
     [CAMPOS_CASO.fechaCierre]: estaCerrado(estado) ? hoyEnBogota() : null,
+    [CAMPOS_CASO.modificadoPor]: autorId,
   };
 
   if (observaciones !== null) {
@@ -218,12 +245,16 @@ export async function cambiarEstadoCaso(
 export async function reprogramarLimite(
   recordId: string,
   fecha: string,
+  autorId: string,
 ): Promise<Caso> {
   const registro = await actualizarRegistro(
     env.baseCrm,
     env.tablaCasos,
     recordId,
-    { [CAMPOS_CASO.fechaLimite]: fecha },
+    {
+      [CAMPOS_CASO.fechaLimite]: fecha,
+      [CAMPOS_CASO.modificadoPor]: autorId,
+    },
   );
   return aCaso(registro, hoyEnBogota());
 }

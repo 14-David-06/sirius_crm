@@ -3,9 +3,11 @@ import { NextResponse } from "next/server";
 import {
   cambiarEstadoCaso,
   ESTADOS_CASO,
+  obtenerCaso,
   reprogramarLimite,
   type EstadoCaso,
 } from "@/lib/casos";
+import { permisosDe, puedeEditar } from "@/lib/permisos";
 import { getSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -28,6 +30,19 @@ export async function PATCH(
     return NextResponse.json({ error: "Caso inválido." }, { status: 400 });
   }
 
+  // El permiso se resuelve contra el registro real, no contra lo que mande
+  // el cliente: es la única comprobación que un curl no puede saltarse.
+  const caso = await obtenerCaso(id);
+  if (!caso) {
+    return NextResponse.json({ error: "El caso no existe." }, { status: 404 });
+  }
+  if (!puedeEditar(permisosDe(session), caso, session)) {
+    return NextResponse.json(
+      { error: "Este caso no está a tu nombre y tu nivel no permite editarlo." },
+      { status: 403 },
+    );
+  }
+
   const body = (await request.json().catch(() => null)) as {
     accion?: unknown;
     estado?: unknown;
@@ -48,7 +63,12 @@ export async function PATCH(
           : null;
 
       return NextResponse.json({
-        caso: await cambiarEstadoCaso(id, estado as EstadoCaso, observaciones),
+        caso: await cambiarEstadoCaso(
+          id,
+          estado as EstadoCaso,
+          observaciones,
+          session.idEmpleado,
+        ),
       });
     }
 
@@ -58,7 +78,7 @@ export async function PATCH(
         return NextResponse.json({ error: "Fecha inválida." }, { status: 400 });
       }
 
-      return NextResponse.json({ caso: await reprogramarLimite(id, fecha) });
+      return NextResponse.json({ caso: await reprogramarLimite(id, fecha, session.idEmpleado) });
     }
 
     return NextResponse.json({ error: "Acción inválida." }, { status: 400 });
