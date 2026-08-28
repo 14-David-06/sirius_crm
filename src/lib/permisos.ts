@@ -170,3 +170,26 @@ export function motivoSinAcceso(permisos: Permisos): string {
   }
   return `Tu nivel de acceso (${permisos.nivel}) solo permite ver tus propios registros, no los del resto del equipo.`;
 }
+
+/**
+ * Traduce los permisos a frases legibles. La pantalla de Configuración las
+ * lista para que cada persona sepa por qué ve —o no ve— cada módulo, sin
+ * tener que preguntar. Sale de los mismos flags que gobiernan el sistema, así
+ * que no puede desalinearse de lo que realmente ocurre.
+ */
+export function describirPermisos(
+  permisos: Permisos,
+): { etiqueta: string; permitido: boolean }[] {
+  return [
+    { etiqueta: "Ver los registros de todo el equipo", permitido: permisos.verTodo },
+    { etiqueta: "Registrar visitas, casos y pedidos", permitido: permisos.crear },
+    { etiqueta: "Editar sus propios registros", permitido: permisos.actualizarPropio },
+    { etiqueta: "Editar registros de cualquier persona", permitido: permisos.actualizarTodo },
+    {
+      etiqueta: "Editar el maestro de clientes, contactos y productos",
+      permitido: permisos.gestionarCatalogo,
+    },
+    { etiqueta: "Configurar el sistema", permitido: permisos.configurar },
+    { etiqueta: "Gestionar usuarios y niveles de acceso", permitido: permisos.gestionUsuarios },
+  ];
+}

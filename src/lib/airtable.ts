@@ -266,3 +266,49 @@ const leerPersonal = cachearLectura(
 export async function listarPersonalActivo(): Promise<PersonaActiva[]> {
   return leerPersonal();
 }
+
+export type AccesoEquipo = {
+  idEmpleado: string;
+  nombre: string;
+  rol: string | null;
+  nivelAcceso: string | null;
+  /**
+   * Si ya definió contraseña. Se expone como booleano y nunca el hash: quien
+   * mira esta pantalla necesita saber a quién falta activar, no la credencial.
+   */
+  tieneClave: boolean;
+};
+
+const leerAccesos = cachearLectura(
+  "accesos-equipo",
+  ETIQUETAS.personal,
+  async (): Promise<AccesoEquipo[]> => {
+    const registros = await listarRegistros(env.baseNomina, env.tablaPersonal, {
+      fields: [
+        CAMPOS_PERSONAL.idEmpleado,
+        CAMPOS_PERSONAL.nombre,
+        CAMPOS_PERSONAL.rol,
+        CAMPOS_PERSONAL.nivelAcceso,
+        CAMPOS_PERSONAL.estado,
+        CAMPOS_PERSONAL.password,
+      ],
+      filterByFormula: `{${CAMPOS_PERSONAL.estado}} = 'Activo'`,
+    });
+
+    return registros
+      .map((registro) => ({
+        idEmpleado: texto(registro.fields[CAMPOS_PERSONAL.idEmpleado]) ?? "",
+        nombre: texto(registro.fields[CAMPOS_PERSONAL.nombre]) ?? "",
+        rol: texto(registro.fields[CAMPOS_PERSONAL.rol]),
+        nivelAcceso: texto(registro.fields[CAMPOS_PERSONAL.nivelAcceso]),
+        tieneClave: Boolean(texto(registro.fields[CAMPOS_PERSONAL.password])),
+      }))
+      .filter((persona) => persona.nombre)
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  },
+);
+
+/** Quién tiene qué nivel de acceso al CRM. Solo para Super Admin. */
+export async function listarAccesosEquipo(): Promise<AccesoEquipo[]> {
+  return leerAccesos();
+}

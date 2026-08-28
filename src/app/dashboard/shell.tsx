@@ -98,7 +98,12 @@ const grupos: { titulo: string; items: ItemNav[] }[] = [
     items: [
       { id: "campanas", etiqueta: "Campañas", Icono: IconMegaphone },
       { id: "reportes", etiqueta: "Reportes", Icono: IconChart },
-      { id: "configuracion", etiqueta: "Configuración", Icono: IconSettings },
+      {
+        id: "configuracion",
+        etiqueta: "Configuración",
+        Icono: IconSettings,
+        href: "/dashboard/configuracion",
+      },
     ],
   },
 ];

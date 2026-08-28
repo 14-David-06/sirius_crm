@@ -86,8 +86,10 @@ export function ModuloPedidos({
     return {
       abiertos: abiertos.length,
       // "Sin despachar" es la pregunta que el cliente hace en campo.
+      // Las dos miden sobre los pedidos abiertos: mezclar alcances haría que
+      // la fila no sumara con la tabla que está justo debajo.
       sinDespachar: abiertos.filter((p) => p.remisiones.length === 0).length,
-      enCamino: pedidos.filter((p) =>
+      enCamino: abiertos.filter((p) =>
         p.remisiones.some((r) => r.despachado && !r.recibido),
       ).length,
       montoAbierto: abiertos.reduce((suma, p) => suma + p.total, 0),
@@ -365,7 +367,9 @@ function FilaPedidoTabla({
             : `${unidades} ${unidades === 1 ? "renglón" : "renglones"}`}
         </td>
         <td className="px-5 py-3 whitespace-nowrap tabular-nums">
-          {pedido.total > 0 ? formatearPesos(pedido.total) : "—"}
+          {/* Cero es un total legítimo — las muestras comerciales van sin
+              costo. Solo se muestra "—" cuando no hay renglones. */}
+          {pedido.lineas.length === 0 ? "—" : formatearPesos(pedido.total)}
         </td>
         <td className="px-5 py-3">
           <EstadoBadge estado={pedido.estado} />
