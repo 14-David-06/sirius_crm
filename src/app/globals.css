@@ -69,3 +69,74 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* --------------------------- Tarjetas en 3D ----------------------------- */
+
+/*
+ * La tarjeta se inclina siguiendo el mouse y muestra un brillo bajo el
+ * cursor. Los valores los escribe `Efecto3D` (src/app/efecto-3d.tsx) como
+ * variables; aquí solo vive la presentación.
+ */
+.tarjeta3d {
+  --giro-x: 0deg;
+  --giro-y: 0deg;
+  --giro-duracion: 0.5s;
+  --brillo-x: 50%;
+  --brillo-y: 50%;
+  --brillo-opacidad: 0;
+
+  position: relative;
+  transform: perspective(1100px) rotateX(var(--giro-x)) rotateY(var(--giro-y));
+  transform-style: preserve-3d;
+  transition:
+    transform var(--giro-duracion) cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.3s ease;
+}
+
+.tarjeta3d::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: var(--brillo-opacidad);
+  transition: opacity 0.3s ease;
+  background: radial-gradient(
+    45rem circle at var(--brillo-x) var(--brillo-y),
+    rgb(37 99 235 / 0.07),
+    transparent 45%
+  );
+}
+
+@media (prefers-color-scheme: dark) {
+  .tarjeta3d::after {
+    background: radial-gradient(
+      45rem circle at var(--brillo-x) var(--brillo-y),
+      rgb(255 255 255 / 0.07),
+      transparent 45%
+    );
+  }
+}
+
+/* La sombra solo aparece mientras la tarjeta está levantada. */
+@media (hover: hover) and (pointer: fine) {
+  .tarjeta3d:hover {
+    box-shadow: 0 18px 40px -22px rgb(15 23 42 / 0.35);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .tarjeta3d:hover {
+      box-shadow: 0 18px 40px -18px rgb(0 0 0 / 0.6);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tarjeta3d {
+    transform: none;
+  }
+
+  .tarjeta3d::after {
+    display: none;
+  }
+}

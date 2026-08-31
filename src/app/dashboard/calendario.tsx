@@ -7,7 +7,7 @@ import type { EstadoPendiente, Pendiente } from "@/lib/agenda";
 import { IconAlert, IconChevronLeft, IconChevronRight } from "./icons";
 
 const card =
-  "rounded-xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900";
+  "tarjeta3d rounded-xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900";
 
 const MESES = [
   "enero",

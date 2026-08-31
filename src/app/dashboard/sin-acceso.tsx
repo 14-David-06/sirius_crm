@@ -16,7 +16,7 @@ export function SinAcceso({
 }) {
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 py-10">
-      <div className="rounded-xl border border-slate-200 bg-white p-8 text-center dark:border-white/10 dark:bg-slate-900">
+      <div className="tarjeta3d rounded-xl border border-slate-200 bg-white p-8 text-center dark:border-white/10 dark:bg-slate-900">
         <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-400">
           <IconLifebuoy className="h-6 w-6" />
         </span>

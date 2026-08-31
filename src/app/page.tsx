@@ -176,7 +176,7 @@ export default function Home() {
             {features.map((feature, index) => (
               <div
                 key={feature.title}
-                className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-7 backdrop-blur-xl transition-colors hover:border-white/25 hover:bg-white/[0.07]"
+                className="tarjeta3d group relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-7 backdrop-blur-xl transition-colors hover:border-white/25 hover:bg-white/[0.07]"
               >
                 <span className="absolute top-6 right-7 font-mono text-xs text-white/25">
                   0{index + 1}

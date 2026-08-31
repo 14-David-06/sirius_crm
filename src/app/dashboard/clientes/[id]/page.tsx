@@ -23,7 +23,7 @@ export const dynamic = "force-dynamic";
 const RECORD_ID = /^rec[A-Za-z0-9]{14}$/;
 
 const card =
-  "rounded-xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900";
+  "tarjeta3d rounded-xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900";
 
 export default async function FichaClientePage({
   params,
