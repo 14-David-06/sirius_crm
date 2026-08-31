@@ -27,7 +27,7 @@ export function AccionesCliente({
     if (
       activo &&
       !window.confirm(
-        `¿Inactivar a ${cliente.nombre}? Dejará de aparecer al registrar visitas y pedidos. Su historial se conserva y puedes reactivarlo cuando quieras.`,
+        `¿Inactivar a ${cliente.nombre}? Dejará de aparecer al registrar visitas y pedidos.`,
       )
     ) {
       return;

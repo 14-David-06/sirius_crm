@@ -55,6 +55,7 @@ type Props = {
   clientes: ClienteCore[];
   contactos: ContactoCaso[];
   visitas: VisitaOrigen[];
+  /** Personal activo, para traducir un ID de empleado a su nombre. */
   personal: { nombre: string; rol: string | null; idEmpleado: string }[];
   sesion: { idEmpleado: string; nombre: string };
   hoy: string;
@@ -314,7 +315,6 @@ export function ModuloCasos({
           clientes={clientes}
           contactos={contactos}
           visitas={visitas}
-          personal={personal}
           sesion={sesion}
           hoy={hoy}
           onCerrar={() => setFormularioAbierto(false)}
@@ -326,6 +326,7 @@ export function ModuloCasos({
         <DetalleCaso
           caso={enDetalle}
           contactos={contactos}
+          personal={personal}
           puedeEditar={puedeEditar(permisos, enDetalle, sesion)}
           onEditar={() => setEnEdicion(enDetalle)}
           onCerrar={() => setEnDetalle(null)}
@@ -338,7 +339,6 @@ export function ModuloCasos({
           clientes={clientes}
           contactos={contactos}
           visitas={visitas}
-          personal={personal}
           caso={enEdicion}
           sesion={sesion}
           hoy={hoy}

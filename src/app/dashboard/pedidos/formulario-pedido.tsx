@@ -39,14 +39,12 @@ function renglonVacio(indice: number): Renglon {
 export function FormularioPedido({
   clientes,
   productos,
-  personal,
   sesion,
   hoy,
   onCerrar,
 }: {
   clientes: Cliente[];
   productos: Producto[];
-  personal: { nombre: string; rol: string | null; idEmpleado: string }[];
   sesion: { idEmpleado: string; nombre: string };
   hoy: string;
   onCerrar: () => void;
@@ -55,7 +53,6 @@ export function FormularioPedido({
 
   const [clienteId, setClienteId] = useState("");
   const [fecha, setFecha] = useState(hoy);
-  const [responsableId, setResponsableId] = useState(sesion.idEmpleado);
   const [estado, setEstado] = useState<EstadoPedido>("Recibido");
   const [categoria, setCategoria] = useState("");
   const [notas, setNotas] = useState("");
@@ -166,7 +163,6 @@ export function FormularioPedido({
       body: JSON.stringify({
         idClienteCore: cliente.id,
         fecha,
-        responsableId,
         estado,
         categoriaAplicacion: categoria || undefined,
         notas: notas.trim() || undefined,
@@ -261,19 +257,15 @@ export function FormularioPedido({
               <label htmlFor="pedido-responsable" className={etiqueta}>
                 Responsable comercial
               </label>
-              <select
+              {/* El pedido queda a nombre de quien lo registra, siempre: es la
+                  clave de propiedad con la que se decide quién puede tocarlo,
+                  así que no se elige. */}
+              <p
                 id="pedido-responsable"
-                value={responsableId}
-                onChange={(e) => setResponsableId(e.target.value)}
-                disabled={guardando || personal.length <= 1}
-                className={`${input} cursor-pointer`}
+                className={`${input} bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-400`}
               >
-                {personal.map((persona) => (
-                  <option key={persona.idEmpleado} value={persona.idEmpleado}>
-                    {persona.nombre}
-                  </option>
-                ))}
-              </select>
+                {sesion.nombre}
+              </p>
             </div>
 
             <div className="flex flex-col gap-1.5">

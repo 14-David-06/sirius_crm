@@ -61,6 +61,7 @@ type Props = {
   clientes: ClienteCore[];
   contactos: ContactoVisita[];
   productos: Producto[];
+  /** Personal activo, para traducir un ID de empleado a su nombre. */
   personal: { nombre: string; rol: string | null; idEmpleado: string }[];
   sesion: { idEmpleado: string; nombre: string };
   hoy: string;
@@ -161,7 +162,6 @@ export function ModuloVisitas({
           clientes={clientes}
           contactos={contactos}
           productos={productos}
-          personal={personal}
           visitas={visitas}
           sesion={sesion}
           hoy={hoy}
@@ -175,6 +175,7 @@ export function ModuloVisitas({
         <DetalleVisita
           visita={enDetalle}
           contactos={contactos}
+          personal={personal}
           puedeEditar={puedeEditar(permisos, enDetalle, sesion)}
           onEditar={() => setEnEdicion(enDetalle)}
           onCerrar={() => setEnDetalle(null)}
@@ -187,7 +188,6 @@ export function ModuloVisitas({
           clientes={clientes}
           contactos={contactos}
           productos={productos}
-          personal={personal}
           visitas={visitas}
           visita={enEdicion}
           sesion={sesion}

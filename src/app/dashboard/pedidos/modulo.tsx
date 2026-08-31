@@ -54,7 +54,6 @@ type Props = {
   pedidos: FilaPedido[];
   clientes: Cliente[];
   productos: Producto[];
-  personal: { nombre: string; rol: string | null; idEmpleado: string }[];
   sesion: { idEmpleado: string; nombre: string };
   hoy: string;
   permisos: Permisos;
@@ -64,7 +63,6 @@ export function ModuloPedidos({
   pedidos,
   clientes,
   productos,
-  personal,
   sesion,
   hoy,
   permisos,
@@ -291,7 +289,6 @@ export function ModuloPedidos({
         <FormularioPedido
           clientes={clientes}
           productos={productos}
-          personal={personal}
           sesion={sesion}
           hoy={hoy}
           onCerrar={() => setFormularioAbierto(false)}

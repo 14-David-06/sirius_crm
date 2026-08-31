@@ -5,6 +5,7 @@ import {
   esPropio,
   filtrarPorAlcance,
   motivoSinAcceso,
+  NIVELES,
   permisosDe,
   puedeEditar,
 } from "@/lib/permisos";
@@ -54,9 +55,19 @@ describe("permisosDe", () => {
     expect(p.actualizarPropio).toBe(false);
   });
 
-  it("no deja a Avanzado crear registros operativos", () => {
-    // El JSON del nivel en Airtable solo le da solicitudes y reportes.
-    expect(permisosDe({ nivelAcceso: "Avanzado" }).crear).toBe(false);
+  it("deja a Avanzado crear, pero sin ver los registros del equipo", () => {
+    // Quien recibe una queja debe poder registrarla sin depender de otro.
+    const p = permisosDe({ nivelAcceso: "Avanzado" });
+    expect(p.crear).toBe(true);
+    expect(p.verTodo).toBe(false);
+    expect(p.gestionarCatalogo).toBe(false);
+  });
+
+  it("Lectura es el único nivel que no crea nada", () => {
+    const creadores = NIVELES.filter(
+      (nivel) => permisosDe({ nivelAcceso: nivel }).crear,
+    );
+    expect(creadores).toEqual(["Super Admin", "Admin", "Avanzado", "Usuario"]);
   });
 
   it("reconoce el nivel con espacios y mayúsculas cambiadas", () => {

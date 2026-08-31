@@ -46,10 +46,6 @@ export default async function VisitasPage() {
   const mias = filtrarPorAlcance(visitas, permisos, session);
   const misCasos = filtrarPorAlcance(casos, permisos, session);
 
-  const elegibles = permisos.verTodo
-    ? personal
-    : personal.filter((p) => p.idEmpleado === session.idEmpleado);
-
   return (
     <Shell nombre={session.nombre} rol={session.rol} permisos={permisos}>
       <ModuloVisitas
@@ -58,7 +54,7 @@ export default async function VisitasPage() {
         clientes={clientes}
         contactos={paraSelector}
         productos={productos}
-        personal={elegibles}
+        personal={personal}
         sesion={{
           idEmpleado: session.idEmpleado,
           nombre: session.nombre,

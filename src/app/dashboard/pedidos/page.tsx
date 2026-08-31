@@ -69,17 +69,12 @@ export default async function PedidosPage() {
   });
 
   // Registrar a nombre de otra persona exige alcance de equipo.
-  const elegibles = permisos.verTodo
-    ? personal
-    : personal.filter((p) => p.idEmpleado === session.idEmpleado);
-
   return (
     <Shell nombre={session.nombre} rol={session.rol} permisos={permisos}>
       <ModuloPedidos
         pedidos={filas}
         clientes={clientes.filter((c) => c.activo && c.id)}
         productos={productos}
-        personal={elegibles}
         sesion={{ idEmpleado: session.idEmpleado, nombre: session.nombre }}
         hoy={hoyEnBogota()}
         permisos={permisos}

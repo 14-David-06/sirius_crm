@@ -7,7 +7,7 @@ import type { SessionPayload } from "@/lib/session";
  *
  *   1 Super Admin  crear/leer/actualizar/eliminar *, configurar, gestionUsuarios
  *   2 Admin        crear/leer/actualizar *, eliminar solo propios
- *   3 Avanzado     leer propio + reportes, actualizar propio
+ *   3 Avanzado     leer propio + reportes, crear y actualizar propio
  *   4 Usuario      leer propio, crear registros propios, actualizar propio
  *   5 Lectura      leer propio y nada más
  *
@@ -91,8 +91,10 @@ export function permisosDe(
     // Todos los niveles definidos leen lo propio; "Lectura" solo eso.
     leerPropio: true,
     verTodo: mando,
-    // "Avanzado" y "Lectura" no crean registros operativos; "Usuario" sí, propios.
-    crear: mando || nivel === "Usuario",
+    // Crear es lo que se le pide a cualquiera que trabaje con clientes: quien
+    // recibe una queja debe poder registrarla sin depender de otro. El único
+    // que no escribe es "Lectura", que es exactamente lo que su nombre promete.
+    crear: nivel !== "Lectura",
     actualizarPropio: nivel !== "Lectura",
     actualizarTodo: mando,
     gestionarCatalogo: mando,

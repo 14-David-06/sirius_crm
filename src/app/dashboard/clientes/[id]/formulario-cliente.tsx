@@ -198,7 +198,7 @@ export function FormularioCliente({
             <Campo
               id="cliente-coordenadas"
               etiqueta="Coordenadas GPS"
-              ayuda="Latitud, longitud. Se abre en Google Maps desde la ficha."
+              ayuda="Latitud, longitud"
               valor={datos.coordenadas ?? ""}
               onCambio={(coordenadas) => actualizar({ coordenadas })}
             />
@@ -247,7 +247,6 @@ export function FormularioCliente({
                 id="cliente-canal-detalle"
                 etiqueta="¿Cuál?"
                 obligatorio
-                ayuda="Solo aplica cuando el canal es «Otro»."
                 valor={datos.comoConocioDetalle ?? ""}
                 onCambio={(comoConocioDetalle) =>
                   actualizar({ comoConocioDetalle })

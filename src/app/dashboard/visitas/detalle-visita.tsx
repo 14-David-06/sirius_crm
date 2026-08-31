@@ -18,12 +18,15 @@ const etiquetaDato =
 export function DetalleVisita({
   visita,
   contactos,
+  personal,
   puedeEditar,
   onEditar,
   onCerrar,
 }: {
   visita: Visita;
   contactos: ContactoVisita[];
+  /** Personal activo, para traducir un ID de empleado a su nombre. */
+  personal: { nombre: string; idEmpleado: string }[];
   puedeEditar: boolean;
   onEditar: () => void;
   onCerrar: () => void;
@@ -143,12 +146,28 @@ export function DetalleVisita({
 
           {visita.modificadoPor ? (
             <p className="mt-5 border-t border-slate-200 pt-3 text-[11px] text-slate-500 dark:border-white/10 dark:text-slate-500">
-              Última modificación desde el CRM por {visita.modificadoPor}
+              Última modificación desde el CRM por{" "}
+              {nombreDe(visita.modificadoPor, personal)}
             </p>
           ) : null}
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Traduce un ID de empleado a su nombre. Si no está en el personal activo
+ * —alguien que ya no trabaja aquí— se muestra el ID: es menos legible, pero
+ * sigue diciendo quién fue, que es para lo que sirve la traza.
+ */
+function nombreDe(
+  idEmpleado: string,
+  personal: { nombre: string; idEmpleado: string }[],
+): string {
+  return (
+    personal.find((persona) => persona.idEmpleado === idEmpleado)?.nombre ??
+    idEmpleado
   );
 }
 

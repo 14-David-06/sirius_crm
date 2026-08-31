@@ -37,7 +37,6 @@ type Formulario = {
   fechaApertura: string;
   tipo: TipoCaso;
   descripcion: string;
-  responsableId: string;
   estado: "Abierto" | "En proceso";
   fechaLimite: string;
   seguimiento: string;
@@ -46,7 +45,7 @@ type Formulario = {
   visitaOrigen: string;
 };
 
-function vacio(hoy: string, idEmpleado: string): Formulario {
+function vacio(hoy: string): Formulario {
   return {
     clienteId: "",
     contactoCodigo: "",
@@ -55,7 +54,6 @@ function vacio(hoy: string, idEmpleado: string): Formulario {
     tipo: "Petición",
     tipoOtroDetalle: "",
     descripcion: "",
-    responsableId: idEmpleado,
     estado: "Abierto",
     fechaLimite: "",
     seguimiento: "",
@@ -70,10 +68,9 @@ function desdeCaso(
   caso: Caso,
   clientes: ClienteCore[],
   hoy: string,
-  idEmpleado: string,
 ): Formulario {
   return {
-    ...vacio(hoy, idEmpleado),
+    ...vacio(hoy),
     // El cliente no se edita, pero se resuelve desde su serial para poder
     // filtrar los contactos. Queda vacío si el cliente está inactivo.
     clienteId:
@@ -95,7 +92,6 @@ export function FormularioCaso({
   clientes,
   contactos,
   visitas,
-  personal,
   caso,
   sesion,
   hoy,
@@ -104,7 +100,6 @@ export function FormularioCaso({
   clientes: ClienteCore[];
   contactos: ContactoCaso[];
   visitas: VisitaOrigen[];
-  personal: { nombre: string; rol: string | null; idEmpleado: string }[];
   /** Presente al corregir un caso ya abierto; ausente al abrir uno nuevo. */
   caso?: Caso;
   sesion: { idEmpleado: string; nombre: string };
@@ -114,15 +109,15 @@ export function FormularioCaso({
   const router = useRouter();
   const dialogoRef = useRef<HTMLDivElement>(null);
 
-  const { idEmpleado, nombre: usuario } = sesion;
+  const { nombre: usuario } = sesion;
   const editando = Boolean(caso);
   // Un caso ya cerrado no puede quedarse sin la respuesta que lo cerró.
   const solucionObligatoria = exigeSolucion(caso?.estado ?? null);
 
   const [datos, setDatos] = useState<Formulario>(() =>
     caso
-      ? desdeCaso(caso, clientes, hoy, sesion.idEmpleado)
-      : vacio(hoy, sesion.idEmpleado),
+      ? desdeCaso(caso, clientes, hoy)
+      : vacio(hoy),
   );
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -237,7 +232,6 @@ export function FormularioCaso({
             tipo: datos.tipo,
             tipoOtroDetalle: esOtro ? datos.tipoOtroDetalle : "",
             descripcion: datos.descripcion,
-            responsableId: datos.responsableId,
             estado: datos.estado,
             fechaLimite: datos.fechaLimite,
             seguimiento: datos.seguimiento,
@@ -395,12 +389,6 @@ export function FormularioCaso({
                   </optgroup>
                 ) : null}
               </select>
-              {tipoHeredado ? (
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-500">
-                  Este caso se abrió con la clasificación anterior. Puedes
-                  dejarlo así o pasarlo a PQRSF.
-                </p>
-              ) : null}
             </div>
 
             {/* «Otro» a secas no clasifica nada: dentro de un mes nadie sabría
@@ -465,24 +453,15 @@ export function FormularioCaso({
               <label htmlFor="caso-responsable" className={etiqueta}>
                 Responsable
               </label>
-              {/* Se envía el ID de empleado, no el nombre. */}
-              <select
+              {/* El caso queda a nombre de quien lo diligencia, siempre: es la
+                  clave de propiedad con la que se decide quién puede editarlo,
+                  así que no se elige. */}
+              <p
                 id="caso-responsable"
-                value={datos.responsableId}
-                onChange={(e) => actualizar({ responsableId: e.target.value })}
-                className={`${input} mt-1 cursor-pointer`}
+                className={`${input} mt-1 bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-400`}
               >
-                {/* La sesión puede no estar en el personal activo. */}
-                {personal.some((p) => p.idEmpleado === idEmpleado) ? null : (
-                  <option value="">{usuario} (tú)</option>
-                )}
-                {personal.map((p) => (
-                  <option key={p.idEmpleado} value={p.idEmpleado}>
-                    {p.nombre}
-                    {p.idEmpleado === idEmpleado ? " (tú)" : ""}
-                  </option>
-                ))}
-              </select>
+                {usuario}
+              </p>
             </div>
 
             <div className={editando ? "hidden" : undefined}>

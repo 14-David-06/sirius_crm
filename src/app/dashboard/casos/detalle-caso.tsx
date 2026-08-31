@@ -19,12 +19,15 @@ const etiquetaDato =
 export function DetalleCaso({
   caso,
   contactos,
+  personal,
   puedeEditar,
   onEditar,
   onCerrar,
 }: {
   caso: Caso;
   contactos: ContactoCaso[];
+  /** Personal activo, para traducir un ID de empleado a su nombre. */
+  personal: { nombre: string; idEmpleado: string }[];
   puedeEditar: boolean;
   onEditar: () => void;
   onCerrar: () => void;
@@ -96,8 +99,10 @@ export function DetalleCaso({
               valor={caso.responsable}
             />
             <Dato
-              etiqueta="Recibido o digitado por"
-              valor={caso.recibidoPor}
+              etiqueta="Diligenciado por"
+              valor={
+                caso.recibidoPor ? nombreDe(caso.recibidoPor, personal) : null
+              }
             />
             <Dato
               etiqueta="Fecha de apertura"
@@ -141,14 +146,26 @@ export function DetalleCaso({
                     </li>
                   ))}
               </ol>
-              <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-500">
-                El historial no se puede editar: solo se le agregan líneas.
-              </p>
             </section>
           ) : null}
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Traduce un ID de empleado a su nombre. Si no está en el personal activo
+ * —alguien que ya no trabaja aquí— se muestra el ID: es menos legible, pero
+ * sigue diciendo quién fue, que es para lo que sirve la traza.
+ */
+function nombreDe(
+  idEmpleado: string,
+  personal: { nombre: string; idEmpleado: string }[],
+): string {
+  return (
+    personal.find((persona) => persona.idEmpleado === idEmpleado)?.nombre ??
+    idEmpleado
   );
 }
 

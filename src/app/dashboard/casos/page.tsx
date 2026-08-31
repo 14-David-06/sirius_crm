@@ -52,10 +52,6 @@ export default async function CasosPage() {
     objetivo: visita.objetivo,
   }));
 
-  const elegibles = permisos.verTodo
-    ? personal
-    : personal.filter((p) => p.idEmpleado === session.idEmpleado);
-
   return (
     <Shell nombre={session.nombre} rol={session.rol} permisos={permisos}>
       <ModuloCasos
@@ -63,7 +59,7 @@ export default async function CasosPage() {
         clientes={clientes}
         contactos={contactosSelector}
         visitas={origenes}
-        personal={elegibles}
+        personal={personal}
         sesion={{
           idEmpleado: session.idEmpleado,
           nombre: session.nombre,

@@ -39,7 +39,6 @@ type Formulario = {
   /** Codigo Persona Cliente del contacto; "" cuando no se anotó ninguno. */
   contactoCodigo: string;
   fecha: string;
-  responsableId: string;
   tipo: string;
   objetivo: string;
   necesidad: string;
@@ -55,7 +54,6 @@ export function FormularioVisita({
   clientes,
   contactos,
   productos,
-  personal,
   visitas,
   visita,
   sesion,
@@ -66,7 +64,6 @@ export function FormularioVisita({
   clientes: ClienteCore[];
   contactos: ContactoVisita[];
   productos: Producto[];
-  personal: { nombre: string; rol: string | null; idEmpleado: string }[];
   visitas: Visita[];
   /** Presente al corregir una visita ya registrada; ausente al crear una. */
   visita?: Visita;
@@ -76,16 +73,13 @@ export function FormularioVisita({
   onCerrar: () => void;
 }) {
   const router = useRouter();
-  const { idEmpleado, nombre: usuario } = sesion;
+  const { nombre: usuario } = sesion;
   const editando = Boolean(visita);
 
   const inicial: Formulario = {
     clienteId: "",
     contactoCodigo: "",
     fecha: hoy,
-    // Arranca en la propia sesión: si quedara vacío, el select mostraría a
-    // otra persona mientras el estado dice "".
-    responsableId: idEmpleado,
     tipo: "Presencial",
     objetivo: "",
     necesidad: "",
@@ -105,7 +99,7 @@ export function FormularioVisita({
   const [datos, setDatos] = useState<Formulario>(() => {
     if (visita) return desdeVisita(visita, inicial, productos, clientes);
     return borrador
-      ? { ...inicial, ...borrador, responsableId: idEmpleado }
+      ? { ...inicial, ...borrador }
       : inicial;
   });
   const [error, setError] = useState<string | null>(null);
@@ -273,7 +267,7 @@ export function FormularioVisita({
   }
 
   function limpiar() {
-    setDatos({ ...inicial, fecha: hoy, responsableId: idEmpleado });
+    setDatos({ ...inicial, fecha: hoy });
     setInterpretado(null);
     setBorradorRestaurado(false);
     try {
@@ -328,7 +322,6 @@ export function FormularioVisita({
             ...comunes,
             idClienteCore: cliente?.id,
             cliente: cliente?.nombre,
-            responsableId: datos.responsableId,
           }),
         });
 
@@ -540,24 +533,15 @@ export function FormularioVisita({
             </Campo>
 
             <Campo etiqueta="Responsable comercial" htmlFor="responsable">
-              {/* Se envía el ID de empleado, no el nombre: dos personas pueden
-                  llamarse igual y el nombre puede escribirse distinto. */}
-              <select
+              {/* La visita queda a nombre de quien la registra, siempre: es la
+                  clave de propiedad con la que después se decide quién puede
+                  editarla, así que no se elige. */}
+              <p
                 id="responsable"
-                value={datos.responsableId}
-                onChange={(e) => actualizar({ responsableId: e.target.value })}
-                className={`${input} cursor-pointer`}
+                className={`${input} bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-400`}
               >
-                {personal.some((p) => p.idEmpleado === idEmpleado) ? null : (
-                  <option value="">{usuario} (tú)</option>
-                )}
-                {personal.map((p) => (
-                  <option key={p.idEmpleado} value={p.idEmpleado}>
-                    {p.nombre}
-                    {p.idEmpleado === idEmpleado ? " (tú)" : ""}
-                  </option>
-                ))}
-              </select>
+                {usuario}
+              </p>
             </Campo>
 
             <Campo etiqueta="Tipo de visita" htmlFor="tipo" obligatorio>
@@ -782,10 +766,6 @@ export function FormularioVisita({
               placeholder="Lo que queda abierto: enviar ficha técnica, confirmar precio…"
               className={input}
             />
-            <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-400">
-              A diferencia de la próxima acción, esto no lleva fecha ni entra al
-              calendario.
-            </p>
           </Campo>
 
           <Campo
