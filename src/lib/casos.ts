@@ -10,6 +10,8 @@ import {
   alertaPorFecha,
   anotarHistorial,
   describirCambio,
+  describirTipo,
+  TIPO_OTRO,
   estaCerrado,
   type AlertaSla,
   type EstadoCaso,
@@ -30,6 +32,7 @@ const CAMPOS_CASO = {
   idContactoCore: "ID Contacto Cliente",
   fechaApertura: "Fecha Apertura",
   tipo: "Tipo de Requerimiento",
+  tipoOtroDetalle: "Tipo Otro Detalle",
   descripcion: "Descripción",
   responsable: "Responsable",
   idPersonalCore: "ID Personal Core",
@@ -47,8 +50,10 @@ const CAMPOS_CASO = {
 } as const;
 
 export {
+  describirTipo,
   ESTADOS_CASO,
   estaCerrado,
+  TIPO_OTRO,
   exigeSolucion,
   TIPOS_CASO,
   TIPOS_CASO_ANTERIORES,
@@ -71,6 +76,8 @@ export type Caso = {
   idContactoCore: string | null;
   fechaApertura: string | null;
   tipo: string | null;
+  /** Solo tiene contenido cuando el tipo es "Otro". */
+  tipoOtroDetalle: string | null;
   descripcion: string | null;
   responsable: string | null;
   /** ID Empleado del responsable del trámite; es la clave de propiedad. */
@@ -134,6 +141,7 @@ function aCaso(
     idContactoCore: texto(f[CAMPOS_CASO.idContactoCore]),
     fechaApertura: soloDia(f[CAMPOS_CASO.fechaApertura]),
     tipo: texto(f[CAMPOS_CASO.tipo]),
+    tipoOtroDetalle: texto(f[CAMPOS_CASO.tipoOtroDetalle]),
     descripcion: texto(f[CAMPOS_CASO.descripcion]),
     responsable: texto(f[CAMPOS_CASO.responsable]),
     idPersonalCore: texto(f[CAMPOS_CASO.idPersonalCore]),
@@ -153,8 +161,8 @@ function aCaso(
 }
 
 const leerCasos = cachearLectura(
-  // v2: `Caso` sumó contacto, receptor, seguimiento, solución e historial.
-  "casos-v2",
+  // v3: `Caso` sumó el detalle del tipo "Otro".
+  "casos-v3",
   ETIQUETAS.casos,
   async (): Promise<Caso[]> => {
     const registros = await listarRegistros(env.baseCrm, env.tablaCasos, {
@@ -193,6 +201,8 @@ export type EntradaCaso = {
   idContactoCore?: string;
   fechaApertura: string;
   tipo: TipoCaso;
+  /** Obligatorio cuando el tipo es "Otro"; se ignora en los demás. */
+  tipoOtroDetalle?: string;
   descripcion: string;
   responsable: string;
   /** ID Empleado del dueño del caso. */
@@ -213,6 +223,8 @@ export async function crearCaso(entrada: EntradaCaso): Promise<Caso> {
     [CAMPOS_CASO.idContactoCore]: entrada.idContactoCore ?? "",
     [CAMPOS_CASO.fechaApertura]: entrada.fechaApertura,
     [CAMPOS_CASO.tipo]: entrada.tipo,
+    [CAMPOS_CASO.tipoOtroDetalle]:
+      entrada.tipo === TIPO_OTRO ? (entrada.tipoOtroDetalle ?? "") : "",
     [CAMPOS_CASO.descripcion]: entrada.descripcion,
     [CAMPOS_CASO.responsable]: entrada.responsable,
     [CAMPOS_CASO.idPersonalCore]: entrada.idPersonalCore,
@@ -299,6 +311,8 @@ export async function cambiarEstadoCaso(
 export type CambiosCaso = {
   idContactoCore: string | null;
   tipo: TipoCaso;
+  /** Solo se guarda cuando el tipo es "Otro"; en los demás se limpia. */
+  tipoOtroDetalle: string | null;
   descripcion: string;
   fechaLimite: string | null;
   seguimiento: string | null;
@@ -316,7 +330,11 @@ export async function actualizarCaso(
   // Solo se anota lo que de verdad cambió: una bitácora que registra cada
   // apertura del formulario no sirve para rastrear nada.
   const cambios = [
-    describirCambio("Tipo", actual.tipo, datos.tipo),
+    describirCambio(
+      "Tipo",
+      describirTipo(actual.tipo, actual.tipoOtroDetalle),
+      describirTipo(datos.tipo, datos.tipoOtroDetalle),
+    ),
     describirCambio("Descripción", actual.descripcion, datos.descripcion),
     describirCambio("Contacto", actual.idContactoCore, datos.idContactoCore),
     describirCambio("Fecha límite", actual.fechaLimite, datos.fechaLimite),
@@ -328,6 +346,10 @@ export async function actualizarCaso(
   const fields: Record<string, unknown> = {
     [CAMPOS_CASO.idContactoCore]: datos.idContactoCore ?? "",
     [CAMPOS_CASO.tipo]: datos.tipo,
+    // Con cualquier otro tipo el detalle se descarta, para que no quede un
+    // texto viejo contradiciendo la opción elegida.
+    [CAMPOS_CASO.tipoOtroDetalle]:
+      datos.tipo === TIPO_OTRO ? (datos.tipoOtroDetalle ?? "") : "",
     [CAMPOS_CASO.descripcion]: datos.descripcion,
     // Una fecha se vacía con null: "" no es una fecha y Airtable la rechaza.
     [CAMPOS_CASO.fechaLimite]: datos.fechaLimite,

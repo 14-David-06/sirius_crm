@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import type { Caso } from "@/lib/casos";
 import {
+  describirTipo,
   ESTADOS_CASO,
   estaCerrado,
   TIPOS_CASO,
@@ -438,7 +439,9 @@ function FilaCaso({
         ) : null}
       </td>
       <td className="px-5 py-3">{caso.cliente}</td>
-      <td className="px-5 py-3">{caso.tipo ?? "—"}</td>
+      <td className="px-5 py-3">
+        {describirTipo(caso.tipo, caso.tipoOtroDetalle) ?? "—"}
+      </td>
       <td className="px-5 py-3">{caso.responsable ?? "—"}</td>
       <td className="px-5 py-3 whitespace-nowrap">
         {formatearFecha(caso.fechaApertura)}

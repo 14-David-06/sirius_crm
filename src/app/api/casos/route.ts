@@ -5,6 +5,7 @@ import {
   ESTADOS_CASO,
   estaCerrado,
   listarCasos,
+  TIPO_OTRO,
   TIPOS_CASO,
   type EstadoCaso,
   type TipoCaso,
@@ -93,6 +94,14 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  // "Otro" sin explicación no clasifica nada.
+  const tipoOtroDetalle = cadena(body.tipoOtroDetalle);
+  if (tipo === TIPO_OTRO && !tipoOtroDetalle) {
+    return NextResponse.json(
+      { error: "Si el tipo es «Otro», escribe de qué se trata." },
+      { status: 400 },
+    );
+  }
   if (!estado || !ESTADOS_CASO.includes(estado as EstadoCaso)) {
     return NextResponse.json({ error: "Estado inválido." }, { status: 400 });
   }
@@ -140,6 +149,7 @@ export async function POST(request: Request) {
       idContactoCore: cadena(body.idContactoCore) ?? undefined,
       fechaApertura,
       tipo: tipo as TipoCaso,
+      tipoOtroDetalle: tipoOtroDetalle ?? undefined,
       descripcion,
       responsable: autoria.responsable,
       idPersonalCore: autoria.idPersonalCore,

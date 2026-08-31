@@ -7,6 +7,7 @@ import type { Caso } from "@/lib/casos";
 import {
   ESTADOS_CASO,
   exigeSolucion,
+  TIPO_OTRO,
   TIPOS_CASO_ANTERIORES,
   TIPOS_PQRSF,
   type EstadoCaso,
@@ -29,6 +30,8 @@ const ESTADOS_INICIALES = ESTADOS_CASO.filter(
 
 type Formulario = {
   clienteId: string;
+  /** Solo se usa cuando el tipo es "Otro". */
+  tipoOtroDetalle: string;
   /** Codigo Persona Cliente de quien reportó el caso; "" si no se anotó. */
   contactoCodigo: string;
   fechaApertura: string;
@@ -50,6 +53,7 @@ function vacio(hoy: string, idEmpleado: string): Formulario {
     fechaApertura: hoy,
     // PQRSF es lo que se ofrece por defecto al abrir un caso nuevo.
     tipo: "Petición",
+    tipoOtroDetalle: "",
     descripcion: "",
     responsableId: idEmpleado,
     estado: "Abierto",
@@ -78,6 +82,7 @@ function desdeCaso(
     contactoCodigo: caso.idContactoCore ?? "",
     fechaApertura: caso.fechaApertura ?? hoy,
     tipo: (caso.tipo as TipoCaso) ?? "Petición",
+    tipoOtroDetalle: caso.tipoOtroDetalle ?? "",
     descripcion: caso.descripcion ?? "",
     fechaLimite: caso.fechaLimite ?? "",
     seguimiento: caso.seguimiento ?? "",
@@ -123,6 +128,16 @@ export function FormularioCaso({
   const [error, setError] = useState<string | null>(null);
 
   const cliente = clientes.find((c) => c.recordId === datos.clienteId);
+
+  /**
+   * El tipo de la clasificación anterior que este caso ya traía, si lo trae.
+   * Es lo único de esa lista que se sigue ofreciendo, y solo al editar.
+   */
+  const tipoHeredado = TIPOS_CASO_ANTERIORES.find(
+    (anterior) => anterior === datos.tipo,
+  );
+
+  const esOtro = datos.tipo === TIPO_OTRO;
 
   // La visita de origen solo tiene sentido si es del mismo cliente.
   const visitasDelCliente = useMemo(() => {
@@ -177,6 +192,10 @@ export function FormularioCaso({
       setError("Describe el requerimiento del cliente.");
       return;
     }
+    if (esOtro && !datos.tipoOtroDetalle.trim()) {
+      setError("Elegiste «Otro»: escribe de qué se trata el requerimiento.");
+      return;
+    }
     if (datos.fechaLimite && datos.fechaLimite < datos.fechaApertura) {
       setError("La fecha límite no puede ser anterior a la apertura.");
       return;
@@ -199,6 +218,7 @@ export function FormularioCaso({
             accion: "datos",
             idContactoCore: datos.contactoCodigo,
             tipo: datos.tipo,
+            tipoOtroDetalle: esOtro ? datos.tipoOtroDetalle : "",
             descripcion: datos.descripcion,
             fechaLimite: datos.fechaLimite,
             seguimiento: datos.seguimiento,
@@ -215,6 +235,7 @@ export function FormularioCaso({
             idContactoCore: datos.contactoCodigo,
             fechaApertura: datos.fechaApertura,
             tipo: datos.tipo,
+            tipoOtroDetalle: esOtro ? datos.tipoOtroDetalle : "",
             descripcion: datos.descripcion,
             responsableId: datos.responsableId,
             estado: datos.estado,
@@ -351,28 +372,57 @@ export function FormularioCaso({
                 id="caso-tipo"
                 value={datos.tipo}
                 onChange={(e) =>
-                  actualizar({ tipo: e.target.value as TipoCaso })
+                  actualizar({
+                    tipo: e.target.value as TipoCaso,
+                    tipoOtroDetalle:
+                      e.target.value === TIPO_OTRO ? datos.tipoOtroDetalle : "",
+                  })
                 }
                 className={`${input} mt-1 cursor-pointer`}
               >
-                <optgroup label="PQRSF">
-                  {TIPOS_PQRSF.map((tipo) => (
-                    <option key={tipo} value={tipo}>
-                      {tipo}
-                    </option>
-                  ))}
-                </optgroup>
-                {/* Se conservan para no dejar huérfanos los casos ya abiertos
-                    con la clasificación anterior. */}
-                <optgroup label="Clasificación anterior">
-                  {TIPOS_CASO_ANTERIORES.map((tipo) => (
-                    <option key={tipo} value={tipo}>
-                      {tipo}
-                    </option>
-                  ))}
-                </optgroup>
+                {TIPOS_PQRSF.map((tipo) => (
+                  <option key={tipo} value={tipo}>
+                    {tipo}
+                  </option>
+                ))}
+                {/* Solo el valor que este caso ya tenía, cuando viene de la
+                    clasificación anterior: se conserva para no forzar una
+                    reclasificación al corregir cualquier otro campo, pero no
+                    se ofrece como alternativa al abrir un caso nuevo. */}
+                {tipoHeredado ? (
+                  <optgroup label="Clasificación anterior">
+                    <option value={tipoHeredado}>{tipoHeredado}</option>
+                  </optgroup>
+                ) : null}
               </select>
+              {tipoHeredado ? (
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-500">
+                  Este caso se abrió con la clasificación anterior. Puedes
+                  dejarlo así o pasarlo a PQRSF.
+                </p>
+              ) : null}
             </div>
+
+            {/* «Otro» a secas no clasifica nada: dentro de un mes nadie sabría
+                de qué tipo era el caso. */}
+            {esOtro ? (
+              <div>
+                <label htmlFor="caso-tipo-otro" className={etiqueta}>
+                  ¿De qué se trata?
+                  <span className="text-red-600 dark:text-red-400"> *</span>
+                </label>
+                <input
+                  id="caso-tipo-otro"
+                  required
+                  value={datos.tipoOtroDetalle}
+                  onChange={(e) =>
+                    actualizar({ tipoOtroDetalle: e.target.value })
+                  }
+                  placeholder="Devolución, garantía, solicitud de muestra…"
+                  className={`${input} mt-1`}
+                />
+              </div>
+            ) : null}
 
             <div className={editando ? "hidden" : undefined}>
               <label htmlFor="caso-estado" className={etiqueta}>

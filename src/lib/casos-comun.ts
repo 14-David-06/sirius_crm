@@ -45,6 +45,22 @@ export type TipoPqrsf = (typeof TIPOS_PQRSF)[number];
 export type TipoCaso = (typeof TIPOS_CASO)[number];
 export type EstadoCaso = (typeof ESTADOS_CASO)[number];
 
+/** El único tipo que pide explicación escrita. */
+export const TIPO_OTRO = "Otro";
+
+/**
+ * Cómo se muestra el tipo: "Otro" a secas no dice nada, así que se imprime
+ * junto a su detalle. Mismo criterio que el canal por el que llegó un cliente.
+ */
+export function describirTipo(
+  tipo: string | null,
+  detalle: string | null,
+): string | null {
+  if (!tipo) return null;
+  if (tipo === TIPO_OTRO && detalle) return `${tipo} — ${detalle}`;
+  return tipo;
+}
+
 export type AlertaSla = "vencido" | "hoy" | "en-plazo" | "sin-plazo" | "cerrado";
 
 /** Un caso deja de exigir acción del equipo cuando se resuelve o se cierra. */

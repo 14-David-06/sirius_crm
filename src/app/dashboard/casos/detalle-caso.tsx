@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 
 import type { Caso } from "@/lib/casos";
+import { describirTipo } from "@/lib/casos-comun";
 import { formatearFecha } from "@/lib/fechas";
 import { IconClose } from "../icons";
 import type { ContactoCaso } from "./modulo";
@@ -59,7 +60,8 @@ export function DetalleCaso({
             </h2>
             <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
               <span className="font-mono">{caso.id}</span> ·{" "}
-              {caso.tipo ?? "sin tipo"} · {caso.estado ?? "sin estado"}
+              {describirTipo(caso.tipo, caso.tipoOtroDetalle) ?? "sin tipo"} ·{" "}
+              {caso.estado ?? "sin estado"}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">

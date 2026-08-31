@@ -46,14 +46,8 @@ const CAMPOS_CONTACTO = {
   codigo: "Codigo Persona Cliente",
   nombre: "Nombre Completo",
   cargo: "Cargo",
-  /**
-   * `Funciones` es la multi-selección con la que trabaja el CRM. `Tipo de
-   * Contacto` es el select anterior: se conserva y se mantiene en sincronía
-   * con la primera función para no romper vistas ni automatizaciones que ya
-   * lo miran desde Airtable.
-   */
+  /** Las áreas que cubre el contacto: una o varias. */
   funciones: "Funciones",
-  tipo: "Tipo de Contacto",
   cedula: "Cedula",
   email: "Email",
   emailNotificacion: "Email Notificacion",
@@ -357,13 +351,7 @@ function aContacto(registro: AirtableRecord): ContactoCliente {
     codigo: texto(f[CAMPOS_CONTACTO.codigo]),
     nombre: texto(f[CAMPOS_CONTACTO.nombre]) ?? "",
     cargo: texto(f[CAMPOS_CONTACTO.cargo]),
-    // El select viejo es el respaldo de los contactos anteriores a `Funciones`.
-    funciones: (() => {
-      const funciones = reconocerFunciones(f[CAMPOS_CONTACTO.funciones]);
-      return funciones.length > 0
-        ? funciones
-        : reconocerFunciones(texto(f[CAMPOS_CONTACTO.tipo]));
-    })(),
+    funciones: reconocerFunciones(f[CAMPOS_CONTACTO.funciones]),
     cedula: texto(f[CAMPOS_CONTACTO.cedula]),
     email: texto(f[CAMPOS_CONTACTO.email]),
     emailNotificacion: texto(f[CAMPOS_CONTACTO.emailNotificacion]),
@@ -372,20 +360,6 @@ function aContacto(registro: AirtableRecord): ContactoCliente {
     clientes: vinculos(f[CAMPOS_CONTACTO.cliente]),
     creadoPor: texto(f[CAMPOS_CONTACTO.creadoPor]),
     modificadoPor: texto(f[CAMPOS_CONTACTO.modificadoPor]),
-  };
-}
-
-/**
- * Las dos celdas que guardan la clasificación. `Tipo de Contacto` queda con
- * la primera función: es un `singleSelect` y solo admite una, pero mantenerlo
- * al día evita que las vistas de Airtable que lo usan queden en blanco.
- */
-function funcionesEnAirtable(
-  funciones: TipoContacto[],
-): Record<string, unknown> {
-  return {
-    [CAMPOS_CONTACTO.funciones]: funciones,
-    [CAMPOS_CONTACTO.tipo]: funciones[0] ?? null,
   };
 }
 
@@ -399,7 +373,7 @@ export async function crearContacto(
       [CAMPOS_CONTACTO.nombre]: entrada.nombre,
       [CAMPOS_CONTACTO.cliente]: [entrada.cliente],
       [CAMPOS_CONTACTO.cargo]: entrada.cargo ?? "",
-      ...funcionesEnAirtable(entrada.funciones ?? []),
+      [CAMPOS_CONTACTO.funciones]: entrada.funciones ?? [],
       [CAMPOS_CONTACTO.cedula]: entrada.cedula ?? "",
       [CAMPOS_CONTACTO.email]: entrada.email ?? "",
       [CAMPOS_CONTACTO.emailNotificacion]: entrada.emailNotificacion ?? "",
@@ -440,7 +414,7 @@ export async function actualizarContacto(
     {
       [CAMPOS_CONTACTO.nombre]: datos.nombre,
       [CAMPOS_CONTACTO.cargo]: datos.cargo ?? "",
-      ...funcionesEnAirtable(datos.funciones),
+      [CAMPOS_CONTACTO.funciones]: datos.funciones,
       [CAMPOS_CONTACTO.cedula]: datos.cedula ?? "",
       [CAMPOS_CONTACTO.email]: datos.email ?? "",
       [CAMPOS_CONTACTO.emailNotificacion]: datos.emailNotificacion ?? "",

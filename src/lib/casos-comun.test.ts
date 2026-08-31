@@ -4,10 +4,13 @@ import {
   alertaPorFecha,
   anotarHistorial,
   describirCambio,
+  describirTipo,
   ESTADOS_CASO,
   estaCerrado,
   exigeSolucion,
   TIPOS_CASO,
+  TIPOS_CASO_ANTERIORES,
+  TIPOS_PQRSF,
 } from "@/lib/casos-comun";
 
 const HOY = "2026-08-27";
@@ -124,6 +127,24 @@ describe("describirCambio", () => {
   });
 });
 
+describe("describirTipo", () => {
+  it("junta «Otro» con su detalle: solo no clasifica nada", () => {
+    expect(describirTipo("Otro", "Solicitud de muestra")).toBe(
+      "Otro — Solicitud de muestra",
+    );
+  });
+
+  it("ignora el detalle cuando el tipo no es «Otro»", () => {
+    // Puede quedar texto viejo si alguien cambió la opción desde Airtable.
+    expect(describirTipo("Reclamo", "sobra")).toBe("Reclamo");
+  });
+
+  it("sin tipo no inventa nada, y «Otro» sin detalle se muestra tal cual", () => {
+    expect(describirTipo(null, "algo")).toBeNull();
+    expect(describirTipo("Otro", null)).toBe("Otro");
+  });
+});
+
 describe("exigeSolucion", () => {
   it("solo al resolver o cerrar", () => {
     expect(exigeSolucion("Resuelto")).toBe(true);
@@ -131,6 +152,26 @@ describe("exigeSolucion", () => {
     expect(exigeSolucion("Abierto")).toBe(false);
     expect(exigeSolucion("En proceso")).toBe(false);
     expect(exigeSolucion(null)).toBe(false);
+  });
+});
+
+describe("TIPOS_PQRSF", () => {
+  it("es exactamente lo que se ofrece al abrir un caso nuevo", () => {
+    // La clasificación anterior no se ofrece al crear: solo se conserva en el
+    // caso que ya la traía, y eso lo decide el formulario.
+    expect([...TIPOS_PQRSF]).toEqual([
+      "Petición",
+      "Queja",
+      "Reclamo",
+      "Sugerencia",
+      "Felicitación",
+      "Otro",
+    ]);
+  });
+
+  it("no se solapa con la clasificación anterior", () => {
+    const anteriores = new Set<string>(TIPOS_CASO_ANTERIORES);
+    expect(TIPOS_PQRSF.filter((tipo) => anteriores.has(tipo))).toEqual([]);
   });
 });
 

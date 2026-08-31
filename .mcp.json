@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "sirius-crm": {
+      "command": "node",
+      "args": ["mcp/servidor.mjs"]
+    }
+  }
+}

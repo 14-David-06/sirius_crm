@@ -7,6 +7,7 @@ import {
   exigeSolucion,
   obtenerCaso,
   reprogramarLimite,
+  TIPO_OTRO,
   TIPOS_CASO,
   type EstadoCaso,
   type TipoCaso,
@@ -119,6 +120,16 @@ export async function PATCH(
           { status: 400 },
         );
       }
+
+      // "Otro" sin explicación no clasifica nada: dentro de un mes nadie
+      // sabrá de qué tipo era el caso.
+      const tipoOtroDetalle = cadena(body.tipoOtroDetalle);
+      if (tipo === TIPO_OTRO && !tipoOtroDetalle) {
+        return NextResponse.json(
+          { error: "Si el tipo es «Otro», escribe de qué se trata." },
+          { status: 400 },
+        );
+      }
       if (fechaLimite && !FECHA.test(fechaLimite)) {
         return NextResponse.json(
           { error: "Fecha límite inválida." },
@@ -153,6 +164,7 @@ export async function PATCH(
         {
           idContactoCore: cadena(body.idContactoCore),
           tipo: tipo as TipoCaso,
+          tipoOtroDetalle,
           descripcion,
           fechaLimite,
           seguimiento: cadena(body.seguimiento),
