@@ -2,12 +2,12 @@ import { redirect } from "next/navigation";
 
 import { listarPersonalActivo } from "@/lib/airtable";
 import { listarCasos } from "@/lib/casos";
-import { listarClientes } from "@/lib/clientes";
+import { listarClientes, listarContactos } from "@/lib/clientes";
 import { hoyEnBogota, listarVisitas } from "@/lib/crm";
 import { filtrarPorAlcance, permisosDe } from "@/lib/permisos";
 import { getSession } from "@/lib/session";
 import { Shell } from "../shell";
-import { ModuloCasos } from "./modulo";
+import { ModuloCasos, type ContactoCaso } from "./modulo";
 
 // Los casos cambian de estado durante el día: nunca se sirven cacheados.
 export const dynamic = "force-dynamic";
@@ -19,12 +19,24 @@ export default async function CasosPage() {
     redirect("/login");
   }
 
-  const [casos, clientes, visitas, personal] = await Promise.all([
+  const [casos, clientes, contactos, visitas, personal] = await Promise.all([
     listarCasos(),
     listarClientes(),
+    listarContactos(),
     listarVisitas(),
     listarPersonalActivo(),
   ]);
+
+  // Solo los que tienen serial: es la llave con la que el caso los guarda.
+  const contactosSelector: ContactoCaso[] = contactos
+    .filter((contacto) => contacto.codigo)
+    .map((contacto) => ({
+      codigo: contacto.codigo as string,
+      nombre: contacto.nombre,
+      funciones: contacto.funciones,
+      activo: contacto.activo,
+      clientes: contacto.clientes,
+    }));
 
   const permisos = permisosDe(session);
   const mios = filtrarPorAlcance(casos, permisos, session);
@@ -49,6 +61,7 @@ export default async function CasosPage() {
       <ModuloCasos
         casos={mios}
         clientes={clientes}
+        contactos={contactosSelector}
         visitas={origenes}
         personal={elegibles}
         sesion={{

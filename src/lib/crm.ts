@@ -23,6 +23,7 @@ export const CAMPOS_VISITA = {
   serial: "Codigo Serial",
   idClienteCore: "ID Cliente Core",
   cliente: "Cliente",
+  idContactoCore: "ID Contacto Cliente",
   fecha: "Fecha Visita",
   responsable: "Responsable Comercial",
   idPersonalCore: "ID Personal Core",
@@ -35,6 +36,7 @@ export const CAMPOS_VISITA = {
   resultado: "Resultado",
   proximaAccion: "Próxima Acción",
   fechaSeguimiento: "Fecha Próximo Seguimiento",
+  pendientes: "Pendientes",
   observaciones: "Observaciones",
   creada: "Creada",
   estadoSeguimiento: "Estado Seguimiento",
@@ -42,7 +44,9 @@ export const CAMPOS_VISITA = {
 
 /** Listas desplegables: salen de la hoja "Listas" del Excel. */
 export {
+  esErrorVisita,
   RESULTADOS_VISITA,
+  revisarVisita,
   TIPOS_VISITA,
 } from "@/lib/crm-comun";
 export type {
@@ -56,6 +60,8 @@ export type Visita = {
   id: string;
   idClienteCore: string | null;
   cliente: string;
+  /** Codigo Persona Cliente del contacto con quien se hizo; null si no se anotó. */
+  idContactoCore: string | null;
   fecha: string | null;
   responsable: string | null;
   /** ID Empleado de quien la registró; es la clave de propiedad. */
@@ -70,6 +76,8 @@ export type Visita = {
   resultado: string | null;
   proximaAccion: string | null;
   fechaSeguimiento: string | null;
+  /** Lo que queda abierto, aparte de la próxima acción con fecha. */
+  pendientes: string | null;
   observaciones: string | null;
   estadoSeguimiento: EstadoSeguimiento;
 };
@@ -83,6 +91,7 @@ function aVisita(record: AirtableRecord): Visita {
     id: texto(f[CAMPOS_VISITA.id]) ?? record.id,
     idClienteCore: texto(f[CAMPOS_VISITA.idClienteCore]),
     cliente: texto(f[CAMPOS_VISITA.cliente]) ?? "Sin cliente",
+    idContactoCore: texto(f[CAMPOS_VISITA.idContactoCore]),
     fecha: texto(f[CAMPOS_VISITA.fecha]),
     responsable: texto(f[CAMPOS_VISITA.responsable]),
     idPersonalCore: texto(f[CAMPOS_VISITA.idPersonalCore]),
@@ -95,6 +104,7 @@ function aVisita(record: AirtableRecord): Visita {
     resultado: texto(f[CAMPOS_VISITA.resultado]),
     proximaAccion: texto(f[CAMPOS_VISITA.proximaAccion]),
     fechaSeguimiento: texto(f[CAMPOS_VISITA.fechaSeguimiento]),
+    pendientes: texto(f[CAMPOS_VISITA.pendientes]),
     observaciones: texto(f[CAMPOS_VISITA.observaciones]),
     estadoSeguimiento:
       estado === "Atrasado" || estado === "Hoy" || estado === "Programado"
@@ -104,7 +114,8 @@ function aVisita(record: AirtableRecord): Visita {
 }
 
 const leerVisitas = cachearLectura(
-  "visitas",
+  // v2: `Visita` sumó contacto y pendientes.
+  "visitas-v2",
   ETIQUETAS.visitas,
   async (): Promise<Visita[]> => {
     const registros = await listarRegistros(env.baseCrm, env.tablaVisitas, {
@@ -131,6 +142,7 @@ export async function obtenerVisita(recordId: string): Promise<Visita | null> {
 export type EntradaVisita = {
   idClienteCore: string | null;
   cliente: string;
+  idContactoCore?: string;
   fecha: string;
   responsable: string;
   /** ID Empleado del dueño de la visita. */
@@ -145,6 +157,7 @@ export type EntradaVisita = {
   resultado: ResultadoVisita;
   proximaAccion?: string;
   fechaSeguimiento?: string;
+  pendientes?: string;
   observaciones?: string;
 };
 
@@ -152,6 +165,7 @@ export async function crearVisita(entrada: EntradaVisita): Promise<Visita> {
   const fields: Record<string, unknown> = {
     [CAMPOS_VISITA.idClienteCore]: entrada.idClienteCore ?? "",
     [CAMPOS_VISITA.cliente]: entrada.cliente,
+    [CAMPOS_VISITA.idContactoCore]: entrada.idContactoCore ?? "",
     [CAMPOS_VISITA.fecha]: entrada.fecha,
     [CAMPOS_VISITA.responsable]: entrada.responsable,
     [CAMPOS_VISITA.idPersonalCore]: entrada.idPersonalCore,
@@ -163,6 +177,7 @@ export async function crearVisita(entrada: EntradaVisita): Promise<Visita> {
     [CAMPOS_VISITA.productos]: entrada.productos ?? "",
     [CAMPOS_VISITA.resultado]: entrada.resultado,
     [CAMPOS_VISITA.proximaAccion]: entrada.proximaAccion ?? "",
+    [CAMPOS_VISITA.pendientes]: entrada.pendientes ?? "",
     [CAMPOS_VISITA.observaciones]: entrada.observaciones ?? "",
   };
 
@@ -171,6 +186,58 @@ export async function crearVisita(entrada: EntradaVisita): Promise<Visita> {
   }
 
   return aVisita(await crearRegistro(env.baseCrm, env.tablaVisitas, fields));
+}
+
+/**
+ * Lo que se puede corregir de una visita ya registrada.
+ *
+ * El responsable no está aquí: es la clave de propiedad con la que se decide
+ * quién puede editarla, y cambiarlo desde la misma pantalla que exige el
+ * permiso sería una puerta trasera. El cliente tampoco: una visita hecha a
+ * otra empresa no es una corrección, es otra visita.
+ */
+export type CambiosVisita = {
+  idContactoCore: string | null;
+  fecha: string;
+  tipo: TipoVisita;
+  objetivo: string;
+  necesidad: string | null;
+  idProductosCore: string | null;
+  productos: string | null;
+  resultado: ResultadoVisita;
+  proximaAccion: string | null;
+  fechaSeguimiento: string | null;
+  pendientes: string | null;
+  observaciones: string | null;
+};
+
+export async function actualizarVisita(
+  recordId: string,
+  datos: CambiosVisita,
+  autorId: string,
+): Promise<Visita> {
+  const record = await actualizarRegistro(
+    env.baseCrm,
+    env.tablaVisitas,
+    recordId,
+    {
+      [CAMPOS_VISITA.idContactoCore]: datos.idContactoCore ?? "",
+      [CAMPOS_VISITA.fecha]: datos.fecha,
+      [CAMPOS_VISITA.tipo]: datos.tipo,
+      [CAMPOS_VISITA.objetivo]: datos.objetivo,
+      [CAMPOS_VISITA.necesidad]: datos.necesidad ?? "",
+      [CAMPOS_VISITA.idProductosCore]: datos.idProductosCore ?? "",
+      [CAMPOS_VISITA.productos]: datos.productos ?? "",
+      [CAMPOS_VISITA.resultado]: datos.resultado,
+      [CAMPOS_VISITA.proximaAccion]: datos.proximaAccion ?? "",
+      // Una fecha se vacía con null: "" no es una fecha y Airtable la rechaza.
+      [CAMPOS_VISITA.fechaSeguimiento]: datos.fechaSeguimiento,
+      [CAMPOS_VISITA.pendientes]: datos.pendientes ?? "",
+      [CAMPOS_VISITA.observaciones]: datos.observaciones ?? "",
+      [CAMPOS_VISITA.modificadoPor]: autorId,
+    },
+  );
+  return aVisita(record);
 }
 
 /** Cambia la fecha del compromiso de seguimiento de una visita. */

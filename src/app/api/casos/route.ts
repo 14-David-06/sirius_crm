@@ -137,6 +137,7 @@ export async function POST(request: Request) {
     const caso = await crearCaso({
       idClienteCore: cadena(body.idClienteCore),
       cliente,
+      idContactoCore: cadena(body.idContactoCore) ?? undefined,
       fechaApertura,
       tipo: tipo as TipoCaso,
       descripcion,
@@ -145,6 +146,7 @@ export async function POST(request: Request) {
       autorId: session.idEmpleado,
       estado: estado as EstadoCaso,
       fechaLimite: fechaLimite ?? undefined,
+      seguimiento: cadena(body.seguimiento) ?? undefined,
       observaciones: cadena(body.observaciones) ?? undefined,
       visitaOrigen: visitaOrigen ?? undefined,
     });

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { listarContactos, listarCultivos, obtenerCliente } from "@/lib/clientes";
+import { describirCanal } from "@/lib/clientes-comun";
 import { listarCasosPendientes } from "@/lib/casos";
 import { hoyEnBogota, listarVisitas } from "@/lib/crm";
 import { formatearFecha } from "@/lib/fechas";
@@ -17,6 +18,7 @@ import {
 import { Shell } from "../../shell";
 import { SinAcceso } from "../../sin-acceso";
 import { Estado } from "../lista";
+import { AccionesCliente } from "./acciones-cliente";
 
 export const dynamic = "force-dynamic";
 
@@ -120,13 +122,39 @@ export default async function FichaClientePage({
               </p>
             </div>
 
-            <Link
-              href="/dashboard/visitas"
-              className="flex items-center gap-1.5 rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white transition-colors duration-200 hover:bg-blue-800 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none dark:bg-blue-600 dark:hover:bg-blue-500"
-            >
-              <IconPlus className="h-4 w-4" />
-              Registrar visita
-            </Link>
+            <div className="flex flex-wrap items-start gap-2">
+              {permisos.gestionarCatalogo ? (
+                <AccionesCliente
+                  activo={cliente.activo}
+                  cliente={{
+                    recordId: cliente.recordId,
+                    nombre: cliente.nombre,
+                    nit: cliente.nit,
+                    direccion: cliente.direccion,
+                    ciudad: cliente.ciudad,
+                    departamento: cliente.departamento,
+                    coordenadas: cliente.coordenadas,
+                    distanciaBodegaKm: cliente.distanciaBodegaKm,
+                    sector: cliente.sector,
+                    segmento: cliente.segmento,
+                    etapa: cliente.etapa,
+                    responsableComercial: cliente.responsableComercial,
+                    vinculacion: cliente.vinculacion,
+                    observaciones: cliente.observaciones,
+                    comoConocio: cliente.comoConocio,
+                    comoConocioDetalle: cliente.comoConocioDetalle,
+                  }}
+                />
+              ) : null}
+
+              <Link
+                href="/dashboard/visitas"
+                className="flex items-center gap-1.5 rounded-lg bg-blue-700 px-3 py-2 text-sm font-medium text-white transition-colors duration-200 hover:bg-blue-800 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none dark:bg-blue-600 dark:hover:bg-blue-500"
+              >
+                <IconPlus className="h-4 w-4" />
+                Registrar visita
+              </Link>
+            </div>
           </div>
         </div>
 
@@ -174,6 +202,24 @@ export default async function FichaClientePage({
                 etiqueta="Cliente desde"
                 valor={formatearFecha(cliente.creado)}
               />
+              <Dato
+                etiqueta="¿Cómo nos conoció?"
+                valor={describirCanal(
+                  cliente.comoConocio,
+                  cliente.comoConocioDetalle,
+                )}
+              />
+              <Dato
+                etiqueta="Fecha de vinculación"
+                valor={formatearFecha(cliente.vinculacion)}
+              />
+              <Dato etiqueta="Sector o cultivo" valor={cliente.sector} />
+              <Dato etiqueta="Segmento (potencial)" valor={cliente.segmento} />
+              <Dato etiqueta="Etapa comercial" valor={cliente.etapa} />
+              <Dato
+                etiqueta="Responsable comercial"
+                valor={cliente.responsableComercial}
+              />
               <div className="sm:col-span-2">
                 <dt className="text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-500">
                   Coordenadas
@@ -193,7 +239,25 @@ export default async function FichaClientePage({
                   )}
                 </dd>
               </div>
+
+              {cliente.observaciones ? (
+                <div className="sm:col-span-2">
+                  <dt className="text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-500">
+                    Observaciones
+                  </dt>
+                  <dd className="mt-1 text-sm whitespace-pre-line">
+                    {cliente.observaciones}
+                  </dd>
+                </div>
+              ) : null}
             </dl>
+
+            {cliente.modificadoPor ? (
+              <p className="mt-4 border-t border-slate-200 pt-3 text-[11px] text-slate-500 dark:border-white/10 dark:text-slate-500">
+                Última modificación desde el CRM por {cliente.modificadoPor}
+                {cliente.creadoPor ? ` · creado por ${cliente.creadoPor}` : ""}
+              </p>
+            ) : null}
           </section>
 
           {/* ------------------------- Contactos --------------------------- */}
@@ -218,6 +282,14 @@ export default async function FichaClientePage({
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-sm font-semibold">{contacto.nombre}</p>
+                      {contacto.funciones.map((funcion) => (
+                        <span
+                          key={funcion}
+                          className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-800 dark:bg-blue-500/15 dark:text-blue-300"
+                        >
+                          {funcion}
+                        </span>
+                      ))}
                       {contacto.activo ? null : (
                         <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700 dark:bg-white/10 dark:text-slate-300">
                           Inactivo

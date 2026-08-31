@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
+import { TIPOS_CONTACTO, type TipoContacto } from "@/lib/clientes-comun";
 import {
   IconFilter,
   IconMail,
@@ -30,8 +31,10 @@ export type FilaContacto = {
   codigo: string | null;
   nombre: string;
   cargo: string | null;
+  funciones: TipoContacto[];
   cedula: string | null;
   email: string | null;
+  emailNotificacion: string | null;
   telefono: string | null;
   activo: boolean;
   clientes: ClienteDelContacto[];
@@ -51,10 +54,13 @@ export function ModuloContactos({
   clientes: ClienteSelector[];
 }) {
   const [formularioAbierto, setFormularioAbierto] = useState(false);
+  /** El contacto que se está editando; null cuando no hay ninguno abierto. */
+  const [enEdicion, setEnEdicion] = useState<FilaContacto | null>(null);
   const [busqueda, setBusqueda] = useState("");
   const [estado, setEstado] = useState("activos");
   const [cliente, setCliente] = useState("");
   const [contacto, setContacto] = useState("");
+  const [tipo, setTipo] = useState("");
 
   const clientesConContacto = useMemo(() => {
     const valores = new Map<string, string>();
@@ -77,6 +83,7 @@ export function ModuloContactos({
       activos: filas.filter((f) => f.activo).length,
       sinTelefono: filas.filter((f) => f.activo && !f.telefono).length,
       sinEmail: filas.filter((f) => f.activo && !f.email).length,
+      sinTipo: filas.filter((f) => f.activo && f.funciones.length === 0).length,
       clientes: new Set(
         filas.flatMap((f) => f.clientes.map((c) => c.recordId)),
       ).size,
@@ -91,6 +98,7 @@ export function ModuloContactos({
       const texto = [
         fila.nombre,
         fila.cargo ?? "",
+        fila.funciones.join(" "),
         fila.codigo ?? "",
         fila.cedula ?? "",
         fila.email ?? "",
@@ -105,14 +113,18 @@ export function ModuloContactos({
       if (estado === "inactivos" && fila.activo) return false;
       if (estado === "sin-telefono" && fila.telefono) return false;
       if (estado === "sin-email" && fila.email) return false;
+      if (estado === "sin-tipo" && fila.funciones.length > 0) return false;
       if (cliente && !fila.clientes.some((c) => c.recordId === cliente)) {
         return false;
       }
       if (contacto && fila.cargo !== contacto) return false;
+      if (tipo && !fila.funciones.some((funcion) => funcion === tipo)) {
+        return false;
+      }
 
       return true;
     });
-  }, [filas, busqueda, estado, cliente, contacto]);
+  }, [filas, busqueda, estado, cliente, contacto, tipo]);
 
   return (
     <div className="mx-auto flex max-w-[100rem] flex-col gap-6">
@@ -135,7 +147,7 @@ export function ModuloContactos({
         </button>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Resumen titulo="Contactos activos" valor={resumen.activos} />
         <Resumen titulo="Clientes cubiertos" valor={resumen.clientes} />
         <Resumen
@@ -144,6 +156,7 @@ export function ModuloContactos({
           tono="ambar"
         />
         <Resumen titulo="Sin correo" valor={resumen.sinEmail} tono="ambar" />
+        <Resumen titulo="Sin función" valor={resumen.sinTipo} tono="ambar" />
       </div>
 
       <section className={`${card} p-5`}>
@@ -178,6 +191,7 @@ export function ModuloContactos({
               <option value="activos">Activos</option>
               <option value="sin-telefono">Sin teléfono</option>
               <option value="sin-email">Sin correo</option>
+              <option value="sin-tipo">Sin función</option>
               <option value="inactivos">Inactivos</option>
               <option value="todos">Todos</option>
             </select>
@@ -195,6 +209,23 @@ export function ModuloContactos({
               {clientesConContacto.map(([recordId, nombre]) => (
                 <option key={recordId} value={recordId}>
                   {nombre}
+                </option>
+              ))}
+            </select>
+
+            <label htmlFor="filtro-tipo-contacto" className="sr-only">
+              Función del contacto
+            </label>
+            <select
+              id="filtro-tipo-contacto"
+              value={tipo}
+              onChange={(e) => setTipo(e.target.value)}
+              className={`${input} w-auto cursor-pointer`}
+            >
+              <option value="">Toda función</option>
+              {TIPOS_CONTACTO.map((valor) => (
+                <option key={valor} value={valor}>
+                  {valor}
                 </option>
               ))}
             </select>
@@ -239,16 +270,17 @@ export function ModuloContactos({
           <>
             <p className="mt-4 text-xs text-slate-500 dark:text-slate-500">
               {filtradas.length}{" "}
-              {filtradas.length === 1 ? "contacto" : "contactos"} · el correo y
-              el teléfono se corrigen desde la misma fila
+              {filtradas.length === 1 ? "contacto" : "contactos"} · «Editar»
+              abre la ficha completa
             </p>
 
             <div className="-mx-5 mt-2 overflow-x-auto">
-              <table className="w-full min-w-[62rem] text-sm">
+              <table className="w-full min-w-[70rem] text-sm">
                 <thead>
                   <tr className="border-y border-slate-200 text-left text-xs tracking-wide text-slate-600 uppercase dark:border-white/10 dark:text-slate-400">
                     {[
                       "Contacto",
+                      "Funciones",
                       "Cliente",
                       "Teléfono",
                       "Correo",
@@ -267,7 +299,11 @@ export function ModuloContactos({
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                   {filtradas.map((fila) => (
-                    <Fila key={fila.recordId} fila={fila} />
+                    <Fila
+                      key={fila.recordId}
+                      fila={fila}
+                      onEditar={() => setEnEdicion(fila)}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -283,26 +319,39 @@ export function ModuloContactos({
           onCerrar={() => setFormularioAbierto(false)}
         />
       ) : null}
+
+      {enEdicion ? (
+        <FormularioContacto
+          key={enEdicion.recordId}
+          clientes={clientes}
+          cargos={cargos}
+          contacto={enEdicion}
+          onCerrar={() => setEnEdicion(null)}
+        />
+      ) : null}
     </div>
   );
 }
 
-function Fila({ fila }: { fila: FilaContacto }) {
+function Fila({
+  fila,
+  onEditar,
+}: {
+  fila: FilaContacto;
+  onEditar: () => void;
+}) {
   const router = useRouter();
-  const [editando, setEditando] = useState(false);
-  const [email, setEmail] = useState(fila.email ?? "");
-  const [telefono, setTelefono] = useState(fila.telefono ?? "");
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function enviar(cuerpo: Record<string, unknown>) {
+  async function cambiarEstado() {
     setOcupado(true);
     setError(null);
 
     const respuesta = await fetch(`/api/contactos/${fila.recordId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(cuerpo),
+      body: JSON.stringify({ accion: "estado", activo: !fila.activo }),
     });
 
     setOcupado(false);
@@ -313,15 +362,7 @@ function Fila({ fila }: { fila: FilaContacto }) {
       return;
     }
 
-    setEditando(false);
     router.refresh();
-  }
-
-  function cancelar() {
-    setEmail(fila.email ?? "");
-    setTelefono(fila.telefono ?? "");
-    setError(null);
-    setEditando(false);
   }
 
   return (
@@ -342,6 +383,18 @@ function Fila({ fila }: { fila: FilaContacto }) {
             {error}
           </p>
         ) : null}
+      </td>
+
+      <td className="px-5 py-3">
+        {fila.funciones.length === 0 ? (
+          <Falta />
+        ) : (
+          <div className="flex flex-wrap gap-1">
+            {fila.funciones.map((funcion) => (
+              <EtiquetaTipo key={funcion} tipo={funcion} />
+            ))}
+          </div>
+        )}
       </td>
 
       <td className="px-5 py-3">
@@ -368,67 +421,33 @@ function Fila({ fila }: { fila: FilaContacto }) {
         )}
       </td>
 
-      {editando ? (
-        <>
-          <td className="px-5 py-3">
-            <label htmlFor={`tel-${fila.recordId}`} className="sr-only">
-              Teléfono de {fila.nombre}
-            </label>
-            <input
-              id={`tel-${fila.recordId}`}
-              type="tel"
-              value={telefono}
-              onChange={(e) => setTelefono(e.target.value)}
-              placeholder="300 1234567"
-              disabled={ocupado}
-              className={`${input} w-36`}
-            />
-          </td>
-          <td className="px-5 py-3">
-            <label htmlFor={`mail-${fila.recordId}`} className="sr-only">
-              Correo de {fila.nombre}
-            </label>
-            <input
-              id={`mail-${fila.recordId}`}
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="nombre@empresa.com"
-              disabled={ocupado}
-              className={`${input} w-52`}
-            />
-          </td>
-        </>
-      ) : (
-        <>
-          <td className="px-5 py-3 whitespace-nowrap">
-            {fila.telefono ? (
-              <a
-                href={`tel:${fila.telefono.replace(/\s+/g, "")}`}
-                className="inline-flex items-center gap-1.5 rounded text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none dark:text-blue-300"
-              >
-                <IconPhone className="h-3.5 w-3.5" />
-                {fila.telefono}
-              </a>
-            ) : (
-              <Falta />
-            )}
-          </td>
-          <td className="px-5 py-3">
-            {fila.email ? (
-              <a
-                href={`mailto:${fila.email}`}
-                className="inline-flex items-center gap-1.5 rounded break-all text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none dark:text-blue-300"
-              >
-                <IconMail className="h-3.5 w-3.5 shrink-0" />
-                {fila.email}
-              </a>
-            ) : (
-              <Falta />
-            )}
-          </td>
-        </>
-      )}
+      <td className="px-5 py-3 whitespace-nowrap">
+        {fila.telefono ? (
+          <a
+            href={`tel:${fila.telefono.replace(/\s+/g, "")}`}
+            className="inline-flex items-center gap-1.5 rounded text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none dark:text-blue-300"
+          >
+            <IconPhone className="h-3.5 w-3.5" />
+            {fila.telefono}
+          </a>
+        ) : (
+          <Falta />
+        )}
+      </td>
+
+      <td className="px-5 py-3">
+        {fila.email ? (
+          <a
+            href={`mailto:${fila.email}`}
+            className="inline-flex items-center gap-1.5 rounded break-all text-blue-800 hover:underline focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none dark:text-blue-300"
+          >
+            <IconMail className="h-3.5 w-3.5 shrink-0" />
+            {fila.email}
+          </a>
+        ) : (
+          <Falta />
+        )}
+      </td>
 
       <td className="px-5 py-3">
         <span
@@ -444,37 +463,38 @@ function Fila({ fila }: { fila: FilaContacto }) {
 
       <td className="px-5 py-3 whitespace-nowrap">
         <div className="flex items-center gap-1.5">
-          {editando ? (
-            <>
-              <Accion
-                onClick={() => enviar({ accion: "datos", email, telefono })}
-                disabled={ocupado}
-                destacada
-              >
-                Guardar
-              </Accion>
-              <Accion onClick={cancelar} disabled={ocupado}>
-                Cancelar
-              </Accion>
-            </>
-          ) : (
-            <>
-              <Accion onClick={() => setEditando(true)} disabled={ocupado}>
-                Editar
-              </Accion>
-              <Accion
-                onClick={() =>
-                  enviar({ accion: "estado", activo: !fila.activo })
-                }
-                disabled={ocupado}
-              >
-                {fila.activo ? "Inactivar" : "Activar"}
-              </Accion>
-            </>
-          )}
+          <Accion onClick={onEditar} disabled={ocupado}>
+            Editar
+          </Accion>
+          <Accion onClick={cambiarEstado} disabled={ocupado}>
+            {fila.activo ? "Inactivar" : "Activar"}
+          </Accion>
         </div>
       </td>
     </tr>
+  );
+}
+
+/** Cada área con su color, para leer la tabla de un vistazo. */
+const COLOR_TIPO: Record<TipoContacto, string> = {
+  Gerencia:
+    "bg-purple-50 text-purple-800 dark:bg-purple-500/15 dark:text-purple-300",
+  "Técnico":
+    "bg-emerald-50 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300",
+  Compras: "bg-blue-50 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300",
+  "Facturación":
+    "bg-amber-50 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
+  Pagos:
+    "bg-orange-50 text-orange-800 dark:bg-orange-500/15 dark:text-orange-300",
+};
+
+function EtiquetaTipo({ tipo }: { tipo: TipoContacto }) {
+  return (
+    <span
+      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${COLOR_TIPO[tipo]}`}
+    >
+      {tipo}
+    </span>
   );
 }
 
@@ -489,12 +509,10 @@ function Falta() {
 function Accion({
   onClick,
   disabled,
-  destacada,
   children,
 }: {
   onClick: () => void;
   disabled?: boolean;
-  destacada?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -502,11 +520,7 @@ function Accion({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`cursor-pointer rounded-lg px-2.5 py-1 text-xs font-medium transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none disabled:opacity-50 ${
-        destacada
-          ? "bg-blue-700 text-white hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-500"
-          : "border border-slate-200 hover:bg-slate-100 dark:border-white/10 dark:hover:bg-white/10"
-      }`}
+      className="cursor-pointer rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium transition-colors duration-200 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/10"
     >
       {children}
     </button>

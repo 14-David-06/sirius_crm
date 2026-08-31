@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { actualizarDatosContacto, cambiarEstadoContacto } from "@/lib/clientes";
+import { actualizarContacto, cambiarEstadoContacto } from "@/lib/clientes";
+import { leerFunciones } from "@/lib/clientes-comun";
 import { permisosDe } from "@/lib/permisos";
 import { ETIQUETAS, invalidar } from "@/lib/cache";
 import { getSession } from "@/lib/session";
@@ -10,7 +11,7 @@ export const runtime = "nodejs";
 const RECORD_ID = /^rec[A-Za-z0-9]{14}$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Corrige correo y teléfono, o activa/inactiva el contacto. */
+/** Corrige la ficha del contacto, o lo activa/inactiva. */
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -32,28 +33,55 @@ export async function PATCH(
     return NextResponse.json({ error: "Contacto inválido." }, { status: 400 });
   }
 
-  const body = (await request.json().catch(() => null)) as {
-    accion?: unknown;
-    email?: unknown;
-    telefono?: unknown;
-    activo?: unknown;
-  } | null;
+  const body = (await request.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
 
   try {
     if (body?.accion === "datos") {
+      const nombre = cadena(body.nombre);
       const email = cadena(body.email);
-      const telefono = cadena(body.telefono);
+      const emailNotificacion = cadena(body.emailNotificacion);
+      const funciones = leerFunciones(body.funciones);
 
+      if (!nombre) {
+        return NextResponse.json(
+          { error: "Escribe el nombre completo del contacto." },
+          { status: 400 },
+        );
+      }
+      // Airtable rechaza el registro completo si el campo email no es válido.
       if (email && !EMAIL.test(email)) {
         return NextResponse.json(
           { error: "El correo no tiene un formato válido." },
           { status: 400 },
         );
       }
+      if (emailNotificacion && !EMAIL.test(emailNotificacion)) {
+        return NextResponse.json(
+          { error: "El correo de notificación no tiene un formato válido." },
+          { status: 400 },
+        );
+      }
+      if (funciones === "invalido") {
+        return NextResponse.json(
+          { error: "Alguna de las funciones no es una de las definidas." },
+          { status: 400 },
+        );
+      }
 
-      const actualizado = await actualizarDatosContacto(
+      const actualizado = await actualizarContacto(
         id,
-        { email, telefono },
+        {
+          nombre,
+          cargo: cadena(body.cargo),
+          funciones,
+          cedula: cadena(body.cedula),
+          email,
+          emailNotificacion,
+          telefono: cadena(body.telefono),
+        },
         session.idEmpleado,
       );
       invalidar(ETIQUETAS.contactos);

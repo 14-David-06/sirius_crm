@@ -270,3 +270,96 @@ describe("dictado realista completo", () => {
     }
   });
 });
+
+describe("pendientes", () => {
+  it("reparte lo que se dicta como pendiente en su propio campo", () => {
+    const lectura = interpretarDictado(
+      "El objetivo fue presentar la línea. Los pendientes son enviar la ficha técnica y confirmar el precio.",
+      { hoy: "2026-08-31" },
+    );
+
+    // El dictado capitaliza cada segmento, así que se compara en minúsculas.
+    expect(lectura.objetivo.toLowerCase()).toContain("presentar la línea");
+    expect(lectura.pendientes.toLowerCase()).toContain("enviar la ficha técnica");
+    expect(lectura.pendientes.toLowerCase()).toContain("confirmar el precio");
+  });
+
+  it("no confunde «pendientes» con la próxima acción", () => {
+    const lectura = interpretarDictado(
+      "La próxima acción es enviar cotización. Los pendientes son revisar el lote 4.",
+      { hoy: "2026-08-31" },
+    );
+
+    expect(lectura.proximaAccion.toLowerCase()).toContain("enviar cotización");
+    expect(lectura.proximaAccion).not.toContain("lote 4");
+    expect(lectura.pendientes.toLowerCase()).toContain("revisar el lote 4");
+  });
+
+  it("reconoce «quedó pendiente» además del rótulo con dos puntos", () => {
+    const lectura = interpretarDictado(
+      "Visita presencial. Quedó pendiente el acta de la prueba.",
+      { hoy: "2026-08-31" },
+    );
+
+    expect(lectura.pendientes.toLowerCase()).toContain("acta de la prueba");
+  });
+
+  it("deja el campo vacío cuando nadie dictó pendientes", () => {
+    const lectura = interpretarDictado("Visita presencial a Guaicaramo.", {
+      hoy: "2026-08-31",
+    });
+
+    expect(lectura.pendientes).toBe("");
+  });
+});
+
+describe("contacto", () => {
+  const CONTACTOS = ["Federico Gómez", "María Alexandra Montoya", "Omaira Ortiz"];
+
+  it("reconoce al contacto nombrado en el dictado", () => {
+    const lectura = interpretarDictado(
+      "Estuve con Federico Gómez revisando el lote.",
+      { hoy: "2026-08-31", contactos: CONTACTOS },
+    );
+
+    expect(lectura.contacto).toBe("Federico Gómez");
+  });
+
+  it("lo reconoce aunque Whisper lo transcriba de oído", () => {
+    const lectura = interpretarDictado("Hablé con Omaira Ortíz sobre el pedido.", {
+      hoy: "2026-08-31",
+      contactos: CONTACTOS,
+    });
+
+    expect(lectura.contacto).toBe("Omaira Ortiz");
+  });
+
+  it("no inventa un contacto cuando nadie lo nombró", () => {
+    const lectura = interpretarDictado("Visita presencial de seguimiento.", {
+      hoy: "2026-08-31",
+      contactos: CONTACTOS,
+    });
+
+    expect(lectura.contacto).toBeNull();
+  });
+
+  it("sin lista de contactos no devuelve nada", () => {
+    const lectura = interpretarDictado("Estuve con Federico Gómez.", {
+      hoy: "2026-08-31",
+    });
+
+    expect(lectura.contacto).toBeNull();
+  });
+
+  it("sigue detectando el cliente con la misma búsqueda", () => {
+    // `detectarNombre` ahora sirve a los dos; el cliente no debe haberse roto.
+    const lectura = interpretarDictado("Visita a Guaicaramo S.A.S.", {
+      hoy: "2026-08-31",
+      clientes: ["Guaicaramo S.A.S."],
+      contactos: CONTACTOS,
+    });
+
+    expect(lectura.cliente).toBe("Guaicaramo S.A.S.");
+    expect(lectura.contacto).toBeNull();
+  });
+});

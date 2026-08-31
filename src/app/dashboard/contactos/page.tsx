@@ -47,8 +47,10 @@ export default async function ContactosPage() {
       codigo: contacto.codigo,
       nombre: contacto.nombre,
       cargo: contacto.cargo,
+      funciones: contacto.funciones,
       cedula: contacto.cedula,
       email: contacto.email,
+      emailNotificacion: contacto.emailNotificacion,
       telefono: contacto.telefono,
       activo: contacto.activo,
       clientes: suyos.map((cliente) => ({

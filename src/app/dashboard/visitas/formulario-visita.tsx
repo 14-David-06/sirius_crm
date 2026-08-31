@@ -8,8 +8,10 @@ import type { ClienteCore } from "@/lib/clientes";
 import type { Visita } from "@/lib/crm";
 import { RESULTADOS_VISITA, TIPOS_VISITA } from "@/lib/crm-comun";
 import type { Producto } from "@/lib/productos";
+import { codigosDelCatalogo } from "@/lib/productos-comun";
 import { IconClose } from "../icons";
 import { Microfono } from "./microfono";
+import type { ContactoVisita } from "./modulo";
 
 const input =
   "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-500 focus:border-blue-600 disabled:opacity-60 dark:border-white/10 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:border-blue-400";
@@ -34,6 +36,8 @@ const OBJETIVOS_FRECUENTES = [
 
 type Formulario = {
   clienteId: string;
+  /** Codigo Persona Cliente del contacto; "" cuando no se anotó ninguno. */
+  contactoCodigo: string;
   fecha: string;
   responsableId: string;
   tipo: string;
@@ -43,23 +47,29 @@ type Formulario = {
   resultado: string;
   proximaAccion: string;
   fechaSeguimiento: string;
+  pendientes: string;
   observaciones: string;
 };
 
 export function FormularioVisita({
   clientes,
+  contactos,
   productos,
   personal,
   visitas,
+  visita,
   sesion,
   hoy,
   transcripcionDisponible,
   onCerrar,
 }: {
   clientes: ClienteCore[];
+  contactos: ContactoVisita[];
   productos: Producto[];
   personal: { nombre: string; rol: string | null; idEmpleado: string }[];
   visitas: Visita[];
+  /** Presente al corregir una visita ya registrada; ausente al crear una. */
+  visita?: Visita;
   sesion: { idEmpleado: string; nombre: string };
   hoy: string;
   transcripcionDisponible: boolean;
@@ -67,9 +77,11 @@ export function FormularioVisita({
 }) {
   const router = useRouter();
   const { idEmpleado, nombre: usuario } = sesion;
+  const editando = Boolean(visita);
 
   const inicial: Formulario = {
     clienteId: "",
+    contactoCodigo: "",
     fecha: hoy,
     // Arranca en la propia sesión: si quedara vacío, el select mostraría a
     // otra persona mientras el estado dice "".
@@ -81,16 +93,21 @@ export function FormularioVisita({
     resultado: "Seguimiento pendiente",
     proximaAccion: "",
     fechaSeguimiento: "",
+    pendientes: "",
     observaciones: "",
   };
 
   // El borrador se lee una sola vez, al construir el estado, para no
-  // disparar un render en cascada desde un efecto.
-  const [borrador] = useState(() => leerBorrador(inicial));
+  // disparar un render en cascada desde un efecto. Al editar no se lee: un
+  // borrador a medias pisaría los datos de una visita que ya existe.
+  const [borrador] = useState(() => (visita ? null : leerBorrador(inicial)));
 
-  const [datos, setDatos] = useState<Formulario>(
-    borrador ? { ...inicial, ...borrador, responsableId: idEmpleado } : inicial,
-  );
+  const [datos, setDatos] = useState<Formulario>(() => {
+    if (visita) return desdeVisita(visita, inicial, productos, clientes);
+    return borrador
+      ? { ...inicial, ...borrador, responsableId: idEmpleado }
+      : inicial;
+  });
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -102,7 +119,36 @@ export function FormularioVisita({
   const dialogoRef = useRef<HTMLDivElement>(null);
 
   const cliente = clientes.find((c) => c.recordId === datos.clienteId);
-  const vocabulario = productos.map((p) => p.nombre);
+
+  /**
+   * `productos` llega con el catálogo completo, descontinuados incluidos, para
+   * poder conservar los que una visita vieja ya referencia. Lo que se *ofrece*
+   * son los vigentes, más el descontinuado que ya estuviera marcado: sin eso,
+   * corregir cualquier otro campo lo borraría del registro histórico.
+   */
+  const productosActivos = productos.filter((producto) => producto.activo);
+  const productosOfrecidos = productos.filter(
+    (producto) =>
+      producto.activo || datos.seleccionados.includes(producto.codigo),
+  );
+
+  // El dictado y el vocabulario de Whisper solo miran los vigentes: nadie
+  // debería poder dictar un producto descontinuado en una visita nueva.
+  const vocabulario = productosActivos.map((p) => p.nombre);
+
+  /**
+   * Los contactos del cliente. Se ofrece un inactivo solo si es el que la
+   * visita ya tenía: de lo contrario, corregir cualquier otro campo de una
+   * visita vieja borraría al contacto en silencio.
+   */
+  const contactosDelCliente = contactos.filter(
+    (contacto) =>
+      // El contacto ya anotado siempre se ofrece, aunque esté inactivo o su
+      // cliente no esté en el selector: si no, corregir cualquier otro campo
+      // de una visita vieja lo borraría en silencio.
+      contacto.codigo === datos.contactoCodigo ||
+      (contacto.activo && contacto.clientes.includes(datos.clienteId)),
+  );
 
   const ultimaVisita = cliente
     ? visitas.find((visita) => visita.cliente === cliente.nombre)
@@ -112,14 +158,16 @@ export function FormularioVisita({
     setDatos((previos) => ({ ...previos, ...cambios }));
   }
 
-  /* Borrador: guardar mientras se escribe */
+  /* Borrador: guardar mientras se escribe. Solo al registrar: el borrador de
+     un alta no tiene nada que ver con la corrección de una visita existente. */
   useEffect(() => {
+    if (editando) return;
     try {
       window.localStorage.setItem(CLAVE_BORRADOR, JSON.stringify(datos));
     } catch {
       // Sin localStorage (modo privado) el formulario sigue funcionando.
     }
-  }, [datos]);
+  }, [datos, editando]);
 
   /* Atajos: Esc cierra, Ctrl+Enter guarda */
   useEffect(() => {
@@ -140,8 +188,14 @@ export function FormularioVisita({
   /** Reparte un dictado libre en los campos del formulario. */
   function aplicarDictado(texto: string) {
     const lectura = interpretarDictado(texto, {
-      productos: productos.map((p) => ({ codigo: p.codigo, nombre: p.nombre })),
+      productos: productosActivos.map((p) => ({
+        codigo: p.codigo,
+        nombre: p.nombre,
+      })),
       clientes: clientes.map((c) => c.nombre),
+      // Todos los contactos activos: el cliente puede detectarse en el mismo
+      // dictado, así que todavía no se sabe por cuál filtrar.
+      contactos: contactos.filter((c) => c.activo).map((c) => c.nombre),
       hoy,
     });
 
@@ -159,6 +213,20 @@ export function FormularioVisita({
       cambios.tipo = lectura.tipo;
       detectado.push(`tipo: ${lectura.tipo}`);
     }
+    if (lectura.contacto) {
+      // Solo vale si pertenece al cliente que quedó elegido: un homónimo de
+      // otra empresa sería peor que no anotar contacto.
+      const delCliente = cambios.clienteId ?? datos.clienteId;
+      const encontrado = contactos.find(
+        (contacto) =>
+          contacto.nombre === lectura.contacto &&
+          contacto.clientes.includes(delCliente),
+      );
+      if (encontrado) {
+        cambios.contactoCodigo = encontrado.codigo;
+        detectado.push(`contacto: ${encontrado.nombre}`);
+      }
+    }
     if (lectura.resultado) {
       cambios.resultado = lectura.resultado;
       detectado.push(`resultado: ${lectura.resultado}`);
@@ -169,7 +237,7 @@ export function FormularioVisita({
     }
     if (lectura.productos.length > 0) {
       cambios.seleccionados = lectura.productos;
-      const nombres = productos
+      const nombres = productosActivos
         .filter((p) => lectura.productos.includes(p.codigo))
         .map((p) => p.nombre);
       detectado.push(`productos: ${nombres.join(", ")}`);
@@ -181,6 +249,10 @@ export function FormularioVisita({
     }
     if (lectura.proximaAccion) {
       cambios.proximaAccion = unir(datos.proximaAccion, lectura.proximaAccion);
+    }
+    if (lectura.pendientes) {
+      cambios.pendientes = unir(datos.pendientes, lectura.pendientes);
+      detectado.push("pendientes");
     }
     if (lectura.observaciones) {
       cambios.observaciones = unir(datos.observaciones, lectura.observaciones);
@@ -214,7 +286,9 @@ export function FormularioVisita({
   async function enviar(evento: React.FormEvent, seguirRegistrando = false) {
     evento.preventDefault();
 
-    if (!cliente) {
+    // Al editar, el cliente no se toca: viene del registro y no está en el
+    // formulario, así que no hay nada que exigir aquí.
+    if (!editando && !cliente) {
       setError("Elige un cliente de la lista.");
       return;
     }
@@ -223,41 +297,60 @@ export function FormularioVisita({
       datos.seleccionados.includes(p.codigo),
     );
 
+    const comunes = {
+      idContactoCore: datos.contactoCodigo,
+      fecha: datos.fecha,
+      tipo: datos.tipo,
+      objetivo: datos.objetivo,
+      necesidad: datos.necesidad,
+      idProductosCore: elegidos.map((p) => p.codigo).join(", "),
+      productos: elegidos.map((p) => p.nombre).join(", "),
+      resultado: datos.resultado,
+      proximaAccion: datos.proximaAccion,
+      fechaSeguimiento: datos.fechaSeguimiento,
+      pendientes: datos.pendientes,
+      observaciones: datos.observaciones,
+    };
+
     setGuardando(true);
     setError(null);
 
-    const respuesta = await fetch("/api/visitas", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        idClienteCore: cliente.id,
-        cliente: cliente.nombre,
-        fecha: datos.fecha,
-        responsableId: datos.responsableId,
-        tipo: datos.tipo,
-        objetivo: datos.objetivo,
-        necesidad: datos.necesidad,
-        idProductosCore: elegidos.map((p) => p.codigo).join(", "),
-        productos: elegidos.map((p) => p.nombre).join(", "),
-        resultado: datos.resultado,
-        proximaAccion: datos.proximaAccion,
-        fechaSeguimiento: datos.fechaSeguimiento,
-        observaciones: datos.observaciones,
-      }),
-    });
+    const respuesta = visita
+      ? await fetch(`/api/visitas/${visita.recordId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(comunes),
+        })
+      : await fetch("/api/visitas", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...comunes,
+            idClienteCore: cliente?.id,
+            cliente: cliente?.nombre,
+            responsableId: datos.responsableId,
+          }),
+        });
 
     setGuardando(false);
 
     if (!respuesta.ok) {
       const data = await respuesta.json().catch(() => ({}));
-      setError(String(data.error ?? "No pudimos guardar la visita."));
+      setError(
+        String(
+          data.error ??
+            (editando
+              ? "No pudimos guardar los cambios."
+              : "No pudimos guardar la visita."),
+        ),
+      );
       return;
     }
 
-    limpiar();
+    if (!editando) limpiar();
     router.refresh();
 
-    if (seguirRegistrando) {
+    if (seguirRegistrando && cliente) {
       setAviso(`Visita de ${cliente.nombre} guardada. Registra la siguiente.`);
       return;
     }
@@ -279,10 +372,11 @@ export function FormularioVisita({
               id="titulo-formulario"
               className="text-base font-semibold tracking-tight"
             >
-              Registrar visita
+              {editando ? `Editar visita ${visita?.id ?? ""}` : "Registrar visita"}
             </h2>
             <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
               Se guarda en la base Sirius CRM · tabla Visitas
+              {editando ? " · el cliente y el responsable no cambian aquí" : ""}
             </p>
           </div>
           <button
@@ -356,11 +450,24 @@ export function FormularioVisita({
         <form onSubmit={(e) => enviar(e)} className="flex flex-col gap-4 p-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <Campo etiqueta="Cliente" htmlFor="cliente" obligatorio>
+              {/* Una visita hecha a otra empresa no es una corrección de datos,
+                  es otra visita: al editar el cliente queda fijo. */}
+              {editando ? (
+                <p
+                  id="cliente"
+                  className={`${input} bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-400`}
+                >
+                  {visita?.cliente ?? "Sin cliente"}
+                </p>
+              ) : (
               <select
                 id="cliente"
                 required
                 value={datos.clienteId}
-                onChange={(e) => actualizar({ clienteId: e.target.value })}
+                onChange={(e) =>
+                  // Cambiar de cliente invalida el contacto elegido.
+                  actualizar({ clienteId: e.target.value, contactoCodigo: "" })
+                }
                 className={`${input} cursor-pointer`}
               >
                 <option value="">Selecciona…</option>
@@ -371,12 +478,43 @@ export function FormularioVisita({
                   </option>
                 ))}
               </select>
+              )}
               {cliente ? (
                 <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
                   <span className="font-mono">{cliente.id}</span>
                   {ultimaVisita
                     ? ` · última visita ${ultimaVisita.fecha ?? "—"}: ${ultimaVisita.resultado ?? "sin resultado"}`
                     : " · sin visitas previas"}
+                </p>
+              ) : null}
+            </Campo>
+
+            <Campo etiqueta="Contacto" htmlFor="contacto">
+              <select
+                id="contacto"
+                value={datos.contactoCodigo}
+                disabled={!datos.clienteId && !datos.contactoCodigo}
+                onChange={(e) => actualizar({ contactoCodigo: e.target.value })}
+                className={`${input} cursor-pointer`}
+              >
+                <option value="">
+                  {datos.clienteId || datos.contactoCodigo
+                    ? "Sin anotar"
+                    : "Elige primero el cliente…"}
+                </option>
+                {contactosDelCliente.map((contacto) => (
+                  <option key={contacto.codigo} value={contacto.codigo}>
+                    {contacto.nombre}
+                    {contacto.funciones.length > 0
+                      ? ` · ${contacto.funciones.join(", ")}`
+                      : ""}
+                    {contacto.activo ? "" : " (inactivo)"}
+                  </option>
+                ))}
+              </select>
+              {datos.clienteId && contactosDelCliente.length === 0 ? (
+                <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                  Este cliente no tiene contactos activos en el directorio.
                 </p>
               ) : null}
             </Campo>
@@ -512,12 +650,12 @@ export function FormularioVisita({
                 : ""}
             </legend>
             <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-slate-200 p-2 dark:border-white/10">
-              {productos.length === 0 ? (
+              {productosOfrecidos.length === 0 ? (
                 <p className="p-2 text-sm text-slate-600 dark:text-slate-400">
                   No hay productos activos en Sirius Product Core.
                 </p>
               ) : (
-                productos.map((producto) => (
+                productosOfrecidos.map((producto) => (
                   <label
                     key={producto.recordId}
                     className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors duration-200 hover:bg-slate-50 dark:hover:bg-white/5"
@@ -528,7 +666,14 @@ export function FormularioVisita({
                       onChange={() => alternarProducto(producto.codigo)}
                       className="h-4 w-4 cursor-pointer accent-blue-700 dark:accent-blue-500"
                     />
-                    <span className="flex-1">{producto.nombre}</span>
+                    <span className="flex-1">
+                      {producto.nombre}
+                      {producto.activo ? null : (
+                        <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 dark:bg-white/10 dark:text-slate-300">
+                          descontinuado
+                        </span>
+                      )}
+                    </span>
                     <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
                       {producto.codigo}
                     </span>
@@ -617,6 +762,33 @@ export function FormularioVisita({
           </Campo>
 
           <Campo
+            etiqueta="Pendientes"
+            htmlFor="pendientes"
+            accesorio={
+              <Microfono
+                onTexto={(texto) =>
+                  actualizar({ pendientes: unir(datos.pendientes, texto) })
+                }
+                vocabulario={vocabulario}
+                disponible={transcripcionDisponible}
+              />
+            }
+          >
+            <textarea
+              id="pendientes"
+              rows={2}
+              value={datos.pendientes}
+              onChange={(e) => actualizar({ pendientes: e.target.value })}
+              placeholder="Lo que queda abierto: enviar ficha técnica, confirmar precio…"
+              className={input}
+            />
+            <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-400">
+              A diferencia de la próxima acción, esto no lleva fecha ni entra al
+              calendario.
+            </p>
+          </Campo>
+
+          <Campo
             etiqueta="Observaciones"
             htmlFor="observaciones"
             accesorio={
@@ -648,7 +820,8 @@ export function FormularioVisita({
 
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-4 dark:border-white/10">
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Ctrl + Enter guarda · Esc cierra · el borrador se guarda solo
+              Ctrl + Enter guarda · Esc cierra
+              {editando ? "" : " · el borrador se guarda solo"}
             </p>
             <div className="flex flex-wrap gap-2">
               <button
@@ -658,20 +831,26 @@ export function FormularioVisita({
               >
                 Cancelar
               </button>
-              <button
-                type="button"
-                disabled={guardando}
-                onClick={(e) => enviar(e, true)}
-                className="cursor-pointer rounded-lg border border-blue-700 px-4 py-2 text-sm font-medium text-blue-800 transition-colors duration-200 hover:bg-blue-50 disabled:opacity-50 dark:border-blue-400/50 dark:text-blue-300 dark:hover:bg-blue-500/10"
-              >
-                Guardar y registrar otra
-              </button>
+              {editando ? null : (
+                <button
+                  type="button"
+                  disabled={guardando}
+                  onClick={(e) => enviar(e, true)}
+                  className="cursor-pointer rounded-lg border border-blue-700 px-4 py-2 text-sm font-medium text-blue-800 transition-colors duration-200 hover:bg-blue-50 disabled:opacity-50 dark:border-blue-400/50 dark:text-blue-300 dark:hover:bg-blue-500/10"
+                >
+                  Guardar y registrar otra
+                </button>
+              )}
               <button
                 type="submit"
                 disabled={guardando}
                 className="cursor-pointer rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white transition-colors duration-200 hover:bg-blue-800 disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500"
               >
-                {guardando ? "Guardando…" : "Guardar visita"}
+                {guardando
+                  ? "Guardando…"
+                  : editando
+                    ? "Guardar cambios"
+                    : "Guardar visita"}
               </button>
             </div>
           </div>
@@ -716,6 +895,41 @@ function unir(actual: string, nuevo: string): string {
   if (!limpio) return actual;
   if (!actual.trim()) return limpio;
   return `${actual.trim()} ${limpio}`;
+}
+
+/**
+ * Precarga el formulario con lo que ya tiene la visita que se va a corregir.
+ *
+ * Los productos se guardan como texto en Airtable, así que hay que volver a
+ * cruzarlos con el catálogo — el completo, para no perder un descontinuado que
+ * la visita ya referenciaba.
+ */
+function desdeVisita(
+  visita: Visita,
+  inicial: Formulario,
+  productos: Producto[],
+  clientes: ClienteCore[],
+): Formulario {
+  return {
+    ...inicial,
+    // El cliente no se edita, pero se resuelve desde su serial ("CL-0007")
+    // para poder filtrar el directorio de contactos. Queda vacío si el cliente
+    // está inactivo, porque el selector solo trae los activos.
+    clienteId:
+      clientes.find((cliente) => cliente.id === visita.idClienteCore)
+        ?.recordId ?? "",
+    contactoCodigo: visita.idContactoCore ?? "",
+    fecha: visita.fecha?.slice(0, 10) ?? inicial.fecha,
+    tipo: visita.tipo ?? inicial.tipo,
+    objetivo: visita.objetivo ?? "",
+    necesidad: visita.necesidad ?? "",
+    seleccionados: codigosDelCatalogo(visita.idProductosCore, productos),
+    resultado: visita.resultado ?? inicial.resultado,
+    proximaAccion: visita.proximaAccion ?? "",
+    fechaSeguimiento: visita.fechaSeguimiento?.slice(0, 10) ?? "",
+    pendientes: visita.pendientes ?? "",
+    observaciones: visita.observaciones ?? "",
+  };
 }
 
 /** Devuelve el borrador guardado si tiene contenido útil. */

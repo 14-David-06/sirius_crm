@@ -19,12 +19,26 @@ import {
 } from "@/lib/permisos";
 import { formatearFecha } from "@/lib/fechas";
 import { IconAlert, IconFilter, IconPlus, IconSearch } from "../icons";
+import { DetalleCaso } from "./detalle-caso";
 import { FormularioCaso } from "./formulario-caso";
 
 const card =
   "tarjeta3d rounded-xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900";
 const input =
   "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-500 focus:border-blue-600 disabled:opacity-60 dark:border-white/10 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:border-blue-400";
+
+/**
+ * Lo que el módulo necesita de un contacto: el serial con el que el caso lo
+ * referencia, el nombre para mostrarlo y los clientes a los que pertenece.
+ */
+export type ContactoCaso = {
+  codigo: string;
+  nombre: string;
+  funciones: string[];
+  activo: boolean;
+  /** Record ids de los clientes a los que está vinculado. */
+  clientes: string[];
+};
 
 /** Lo mínimo para identificar la visita que originó un caso. */
 export type VisitaOrigen = {
@@ -38,6 +52,7 @@ export type VisitaOrigen = {
 type Props = {
   casos: Caso[];
   clientes: ClienteCore[];
+  contactos: ContactoCaso[];
   visitas: VisitaOrigen[];
   personal: { nombre: string; rol: string | null; idEmpleado: string }[];
   sesion: { idEmpleado: string; nombre: string };
@@ -48,6 +63,7 @@ type Props = {
 export function ModuloCasos({
   casos,
   clientes,
+  contactos,
   visitas,
   personal,
   sesion,
@@ -55,6 +71,10 @@ export function ModuloCasos({
   permisos,
 }: Props) {
   const [formularioAbierto, setFormularioAbierto] = useState(false);
+  /** El caso que se está mirando en detalle; null cuando no hay ninguno. */
+  const [enDetalle, setEnDetalle] = useState<Caso | null>(null);
+  /** El que se está corrigiendo. Se abre desde el detalle. */
+  const [enEdicion, setEnEdicion] = useState<Caso | null>(null);
   const [busqueda, setBusqueda] = useState("");
   const [estado, setEstado] = useState("pendientes");
   const [tipo, setTipo] = useState("");
@@ -279,6 +299,7 @@ export function ModuloCasos({
                     caso={caso}
                     hoy={hoy}
                     editable={puedeEditar(permisos, caso, sesion)}
+                    onAbrir={() => setEnDetalle(caso)}
                   />
                 ))}
               </tbody>
@@ -290,11 +311,42 @@ export function ModuloCasos({
       {formularioAbierto ? (
         <FormularioCaso
           clientes={clientes}
+          contactos={contactos}
           visitas={visitas}
           personal={personal}
           sesion={sesion}
           hoy={hoy}
           onCerrar={() => setFormularioAbierto(false)}
+        />
+      ) : null}
+
+      {/* El detalle se oculta mientras se edita para no apilar dos modales. */}
+      {enDetalle && !enEdicion ? (
+        <DetalleCaso
+          caso={enDetalle}
+          contactos={contactos}
+          puedeEditar={puedeEditar(permisos, enDetalle, sesion)}
+          onEditar={() => setEnEdicion(enDetalle)}
+          onCerrar={() => setEnDetalle(null)}
+        />
+      ) : null}
+
+      {enEdicion ? (
+        <FormularioCaso
+          key={enEdicion.recordId}
+          clientes={clientes}
+          contactos={contactos}
+          visitas={visitas}
+          personal={personal}
+          caso={enEdicion}
+          sesion={sesion}
+          hoy={hoy}
+          onCerrar={() => {
+            setEnEdicion(null);
+            // El detalle queda cerrado: sus datos serían los de antes de
+            // guardar, y `router.refresh()` aún no los ha traído.
+            setEnDetalle(null);
+          }}
         />
       ) : null}
     </div>
@@ -305,10 +357,12 @@ function FilaCaso({
   caso,
   hoy,
   editable,
+  onAbrir,
 }: {
   caso: Caso;
   hoy: string;
   editable: boolean;
+  onAbrir: () => void;
 }) {
   const router = useRouter();
   const [ocupado, setOcupado] = useState(false);
@@ -337,17 +391,43 @@ function FilaCaso({
     router.refresh();
   }
 
+  /**
+   * Resolver exige decir qué se le respondió al cliente. Se pregunta aquí en
+   * vez de dejar que el servidor devuelva un error: quien cierra un caso ya
+   * tiene la respuesta en la cabeza, y mandarlo al formulario completo para
+   * escribir una línea sobra.
+   */
+  function resolver() {
+    const solucionFinal = window.prompt(
+      "¿Qué solución o respuesta final se le dio al cliente?",
+      caso.solucionFinal ?? "",
+    );
+    if (solucionFinal === null) return;
+    if (!solucionFinal.trim()) {
+      setError("Para resolver el caso hay que escribir la respuesta final.");
+      return;
+    }
+    void enviar({ accion: "estado", estado: "Resuelto", solucionFinal });
+  }
+
   const cerrado = estaCerrado(caso.estado);
 
   return (
     <tr className="align-top transition-colors duration-200 hover:bg-slate-50 dark:hover:bg-white/5">
       <td className="px-5 py-3">
-        <span className="block text-xs font-semibold text-slate-500 tabular-nums dark:text-slate-500">
-          {caso.id}
-        </span>
-        <p className="mt-0.5 max-w-xs text-slate-700 dark:text-slate-300">
-          {caso.descripcion ?? "Sin descripción"}
-        </p>
+        <button
+          type="button"
+          onClick={onAbrir}
+          className="block cursor-pointer text-left"
+        >
+          <span className="block text-xs font-semibold text-slate-500 tabular-nums underline-offset-2 hover:underline dark:text-slate-500">
+            {caso.id}
+            <span className="sr-only"> · ver detalle del caso</span>
+          </span>
+          <p className="mt-0.5 line-clamp-2 max-w-xs text-slate-700 dark:text-slate-300">
+            {caso.descripcion ?? "Sin descripción"}
+          </p>
+        </button>
         {error ? (
           <p
             role="alert"
@@ -421,7 +501,7 @@ function FilaCaso({
           ) : (
             <>
               <Accion
-                onClick={() => enviar({ accion: "estado", estado: "Resuelto" })}
+                onClick={resolver}
                 disabled={ocupado}
                 destacada
               >

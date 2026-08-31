@@ -55,6 +55,14 @@ const SEGUNDOS = {
  * Envuelve una lectura. `clave` tiene que ser única y estable: es parte de la
  * llave del caché, igual que los argumentos de `leer`.
  *
+ * Estable no quiere decir eterna: si cambia la **forma** de lo que se devuelve
+ * —un campo nuevo, uno que se renombra o pasa de valor único a lista— hay que
+ * versionar la clave ("contactos" → "contactos-v2"). Las entradas guardadas no
+ * se invalidan solas al desplegar: sobreviven con la forma vieja y el código
+ * nuevo revienta al leer un campo que ahí no existe. `invalidar()` no sirve
+ * para esto —borra por etiqueta, no reconoce que el tipo cambió—; la clave
+ * nueva simplemente no encuentra nada y vuelve a Airtable.
+ *
  * No envolver lecturas que decidan permisos antes de escribir: un dato viejo
  * ahí dejaría editar un registro que ya cambió de dueño.
  */

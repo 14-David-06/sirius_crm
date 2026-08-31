@@ -6,6 +6,11 @@ import {
   type AirtableRecord,
 } from "@/lib/airtable";
 import { cachearLectura, ETIQUETAS } from "@/lib/cache";
+import {
+  reconocerFunciones,
+  type CanalConocimiento,
+  type TipoContacto,
+} from "@/lib/clientes-comun";
 import { env } from "@/lib/env";
 
 /**
@@ -25,12 +30,30 @@ const CAMPOS_CLIENTE = {
   coordenadas: "coordenadas_gps",
   distancia: "distancia_bodega_km",
   creado: "Fecha de creacion",
+  sector: "Sector o cultivo",
+  segmento: "Segmento (potencial)",
+  etapa: "Etapa comercial",
+  responsableComercial: "Responsable comercial",
+  vinculacion: "Fecha de vinculación",
+  observaciones: "Observaciones",
+  comoConocio: "Como Conocio Sirius",
+  comoConocioDetalle: "Como Conocio Detalle",
+  creadoPor: "Creado Por ID",
+  modificadoPor: "Modificado Por ID",
 } as const;
 
 const CAMPOS_CONTACTO = {
   codigo: "Codigo Persona Cliente",
   nombre: "Nombre Completo",
   cargo: "Cargo",
+  /**
+   * `Funciones` es la multi-selección con la que trabaja el CRM. `Tipo de
+   * Contacto` es el select anterior: se conserva y se mantiene en sincronía
+   * con la primera función para no romper vistas ni automatizaciones que ya
+   * lo miran desde Airtable.
+   */
+  funciones: "Funciones",
+  tipo: "Tipo de Contacto",
   cedula: "Cedula",
   email: "Email",
   emailNotificacion: "Email Notificacion",
@@ -65,6 +88,19 @@ export type Cliente = {
   coordenadas: string | null;
   distanciaBodegaKm: number | null;
   creado: string | null;
+  sector: string | null;
+  segmento: string | null;
+  etapa: string | null;
+  responsableComercial: string | null;
+  vinculacion: string | null;
+  observaciones: string | null;
+  /** Por dónde llegó el cliente; null si nadie lo registró. */
+  comoConocio: string | null;
+  /** Solo tiene contenido cuando el canal es "Otro". */
+  comoConocioDetalle: string | null;
+  /** Auditoría: ID Empleado de quien lo creó y de quien lo tocó por última vez. */
+  creadoPor: string | null;
+  modificadoPor: string | null;
 };
 
 export type ContactoCliente = {
@@ -72,6 +108,8 @@ export type ContactoCliente = {
   codigo: string | null;
   nombre: string;
   cargo: string | null;
+  /** Áreas que cubre dentro del cliente; vacío si nadie lo clasificó. */
+  funciones: TipoContacto[];
   cedula: string | null;
   email: string | null;
   emailNotificacion: string | null;
@@ -139,11 +177,22 @@ function aCliente(record: AirtableRecord): Cliente {
     coordenadas: textoLimpio(f[CAMPOS_CLIENTE.coordenadas]),
     distanciaBodegaKm: numero(f[CAMPOS_CLIENTE.distancia]),
     creado: texto(f[CAMPOS_CLIENTE.creado]),
+    sector: textoLimpio(f[CAMPOS_CLIENTE.sector]),
+    segmento: textoLimpio(f[CAMPOS_CLIENTE.segmento]),
+    etapa: textoLimpio(f[CAMPOS_CLIENTE.etapa]),
+    responsableComercial: textoLimpio(f[CAMPOS_CLIENTE.responsableComercial]),
+    vinculacion: texto(f[CAMPOS_CLIENTE.vinculacion]),
+    observaciones: texto(f[CAMPOS_CLIENTE.observaciones]),
+    comoConocio: texto(f[CAMPOS_CLIENTE.comoConocio]),
+    comoConocioDetalle: textoLimpio(f[CAMPOS_CLIENTE.comoConocioDetalle]),
+    creadoPor: texto(f[CAMPOS_CLIENTE.creadoPor]),
+    modificadoPor: texto(f[CAMPOS_CLIENTE.modificadoPor]),
   };
 }
 
 const leerClientes = cachearLectura(
-  "clientes",
+  // v2: `Cliente` sumó canal, datos comerciales y auditoría.
+  "clientes-v2",
   ETIQUETAS.clientes,
   async (): Promise<Cliente[]> => {
     const registros = await listarRegistros(
@@ -165,7 +214,7 @@ export async function listarClientesCompletos(): Promise<Cliente[]> {
 }
 
 const leerCliente = cachearLectura(
-  "cliente",
+  "cliente-v2",
   ETIQUETAS.clientes,
   async (recordId: string): Promise<Cliente | null> => {
     const registros = await listarRegistros(
@@ -186,8 +235,89 @@ export async function obtenerCliente(recordId: string): Promise<Cliente | null> 
   return leerCliente(recordId);
 }
 
+/* --------------------------- Escritura de cliente ------------------------ */
+
+/**
+ * Lo que la ficha deja corregir. El serial (`ID`), la fecha de creación y las
+ * relaciones —contactos, cultivos— no están aquí: no son datos que se
+ * corrijan escribiendo, se administran desde su propio módulo.
+ */
+export type CambiosCliente = {
+  nombre: string;
+  nit: string | null;
+  direccion: string | null;
+  ciudad: string | null;
+  departamento: string | null;
+  coordenadas: string | null;
+  distanciaBodegaKm: number | null;
+  sector: string | null;
+  segmento: string | null;
+  etapa: string | null;
+  responsableComercial: string | null;
+  vinculacion: string | null;
+  observaciones: string | null;
+  comoConocio: CanalConocimiento | null;
+  /** Solo se guarda cuando el canal es "Otro"; en los demás se limpia. */
+  comoConocioDetalle: string | null;
+};
+
+export async function actualizarCliente(
+  recordId: string,
+  datos: CambiosCliente,
+  autorId: string,
+): Promise<Cliente> {
+  const registro = await actualizarRegistro(
+    env.baseClientes,
+    env.tablaClientes,
+    recordId,
+    {
+      [CAMPOS_CLIENTE.nombre]: datos.nombre,
+      [CAMPOS_CLIENTE.nit]: datos.nit ?? "",
+      [CAMPOS_CLIENTE.direccion]: datos.direccion ?? "",
+      [CAMPOS_CLIENTE.ciudad]: datos.ciudad ?? "",
+      [CAMPOS_CLIENTE.departamento]: datos.departamento ?? "",
+      [CAMPOS_CLIENTE.coordenadas]: datos.coordenadas ?? "",
+      // El número sí va como null: "" no es un número y Airtable lo rechaza.
+      [CAMPOS_CLIENTE.distancia]: datos.distanciaBodegaKm,
+      [CAMPOS_CLIENTE.sector]: datos.sector ?? "",
+      [CAMPOS_CLIENTE.segmento]: datos.segmento ?? "",
+      [CAMPOS_CLIENTE.etapa]: datos.etapa ?? "",
+      [CAMPOS_CLIENTE.responsableComercial]: datos.responsableComercial ?? "",
+      [CAMPOS_CLIENTE.vinculacion]: datos.vinculacion,
+      [CAMPOS_CLIENTE.observaciones]: datos.observaciones ?? "",
+      // Un singleSelect se vacía con null; "" no es una de sus opciones.
+      [CAMPOS_CLIENTE.comoConocio]: datos.comoConocio,
+      [CAMPOS_CLIENTE.comoConocioDetalle]: datos.comoConocioDetalle ?? "",
+      [CAMPOS_CLIENTE.modificadoPor]: autorId,
+    },
+  );
+  return aCliente(registro);
+}
+
+/**
+ * Activa o inactiva el cliente. Nunca se borra: sus visitas, casos y pedidos
+ * lo referencian por serial y quedarían huérfanos.
+ */
+export async function cambiarEstadoCliente(
+  recordId: string,
+  activo: boolean,
+  autorId: string,
+): Promise<Cliente> {
+  const registro = await actualizarRegistro(
+    env.baseClientes,
+    env.tablaClientes,
+    recordId,
+    {
+      [CAMPOS_CLIENTE.estado]: activo ? "Activo" : "Inactivo",
+      [CAMPOS_CLIENTE.modificadoPor]: autorId,
+    },
+  );
+  return aCliente(registro);
+}
+
 const leerContactos = cachearLectura(
-  "contactos",
+  // v2: `tipo` (uno) pasó a `funciones` (varias).
+  "contactos-v2",
   ETIQUETAS.contactos,
   async (): Promise<ContactoCliente[]> => {
     const registros = await listarRegistros(
@@ -213,6 +343,7 @@ export type EntradaContacto = {
   /** ID Empleado de quien lo está creando. */
   autorId: string;
   cargo?: string;
+  funciones?: TipoContacto[];
   cedula?: string;
   email?: string;
   emailNotificacion?: string;
@@ -226,6 +357,13 @@ function aContacto(registro: AirtableRecord): ContactoCliente {
     codigo: texto(f[CAMPOS_CONTACTO.codigo]),
     nombre: texto(f[CAMPOS_CONTACTO.nombre]) ?? "",
     cargo: texto(f[CAMPOS_CONTACTO.cargo]),
+    // El select viejo es el respaldo de los contactos anteriores a `Funciones`.
+    funciones: (() => {
+      const funciones = reconocerFunciones(f[CAMPOS_CONTACTO.funciones]);
+      return funciones.length > 0
+        ? funciones
+        : reconocerFunciones(texto(f[CAMPOS_CONTACTO.tipo]));
+    })(),
     cedula: texto(f[CAMPOS_CONTACTO.cedula]),
     email: texto(f[CAMPOS_CONTACTO.email]),
     emailNotificacion: texto(f[CAMPOS_CONTACTO.emailNotificacion]),
@@ -234,6 +372,20 @@ function aContacto(registro: AirtableRecord): ContactoCliente {
     clientes: vinculos(f[CAMPOS_CONTACTO.cliente]),
     creadoPor: texto(f[CAMPOS_CONTACTO.creadoPor]),
     modificadoPor: texto(f[CAMPOS_CONTACTO.modificadoPor]),
+  };
+}
+
+/**
+ * Las dos celdas que guardan la clasificación. `Tipo de Contacto` queda con
+ * la primera función: es un `singleSelect` y solo admite una, pero mantenerlo
+ * al día evita que las vistas de Airtable que lo usan queden en blanco.
+ */
+function funcionesEnAirtable(
+  funciones: TipoContacto[],
+): Record<string, unknown> {
+  return {
+    [CAMPOS_CONTACTO.funciones]: funciones,
+    [CAMPOS_CONTACTO.tipo]: funciones[0] ?? null,
   };
 }
 
@@ -247,6 +399,7 @@ export async function crearContacto(
       [CAMPOS_CONTACTO.nombre]: entrada.nombre,
       [CAMPOS_CONTACTO.cliente]: [entrada.cliente],
       [CAMPOS_CONTACTO.cargo]: entrada.cargo ?? "",
+      ...funcionesEnAirtable(entrada.funciones ?? []),
       [CAMPOS_CONTACTO.cedula]: entrada.cedula ?? "",
       [CAMPOS_CONTACTO.email]: entrada.email ?? "",
       [CAMPOS_CONTACTO.emailNotificacion]: entrada.emailNotificacion ?? "",
@@ -259,10 +412,25 @@ export async function crearContacto(
   return aContacto(registro);
 }
 
-/** Corrige los datos de localización, que son los que cambian con el tiempo. */
-export async function actualizarDatosContacto(
+/** Lo que se puede corregir de un contacto ya creado. */
+export type CambiosContacto = {
+  nombre: string;
+  cargo: string | null;
+  funciones: TipoContacto[];
+  cedula: string | null;
+  email: string | null;
+  emailNotificacion: string | null;
+  telefono: string | null;
+};
+
+/**
+ * Reescribe la ficha del contacto. El cliente al que pertenece no se toca
+ * aquí: mover a alguien de empresa no es una corrección de datos, es otro
+ * contacto.
+ */
+export async function actualizarContacto(
   recordId: string,
-  datos: { email: string | null; telefono: string | null },
+  datos: CambiosContacto,
   autorId: string,
 ): Promise<ContactoCliente> {
   const registro = await actualizarRegistro(
@@ -270,7 +438,12 @@ export async function actualizarDatosContacto(
     env.tablaPersonalCliente,
     recordId,
     {
+      [CAMPOS_CONTACTO.nombre]: datos.nombre,
+      [CAMPOS_CONTACTO.cargo]: datos.cargo ?? "",
+      ...funcionesEnAirtable(datos.funciones),
+      [CAMPOS_CONTACTO.cedula]: datos.cedula ?? "",
       [CAMPOS_CONTACTO.email]: datos.email ?? "",
+      [CAMPOS_CONTACTO.emailNotificacion]: datos.emailNotificacion ?? "",
       [CAMPOS_CONTACTO.telefono]: datos.telefono ?? "",
       [CAMPOS_CONTACTO.modificadoPor]: autorId,
     },

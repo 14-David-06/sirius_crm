@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { TIPOS_CONTACTO, type TipoContacto } from "@/lib/clientes-comun";
 import { IconClose } from "../icons";
-import type { ClienteSelector } from "./modulo";
+import type { ClienteSelector, FilaContacto } from "./modulo";
 
 const input =
   "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-500 focus:border-blue-600 disabled:opacity-60 dark:border-white/10 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:border-blue-400";
@@ -14,6 +15,7 @@ type Formulario = {
   nombre: string;
   cliente: string;
   cargo: string;
+  funciones: TipoContacto[];
   cedula: string;
   telefono: string;
   email: string;
@@ -24,31 +26,66 @@ const VACIO: Formulario = {
   nombre: "",
   cliente: "",
   cargo: "",
+  funciones: [],
   cedula: "",
   telefono: "",
   email: "",
   emailNotificacion: "",
 };
 
+/** Precarga el formulario con lo que ya tiene el contacto que se va a editar. */
+function desdeContacto(contacto: FilaContacto): Formulario {
+  return {
+    nombre: contacto.nombre,
+    // El vínculo con el cliente no se edita aquí; solo se muestra.
+    cliente: contacto.clientes[0]?.recordId ?? "",
+    cargo: contacto.cargo ?? "",
+    funciones: contacto.funciones,
+    cedula: contacto.cedula ?? "",
+    telefono: contacto.telefono ?? "",
+    email: contacto.email ?? "",
+    emailNotificacion: contacto.emailNotificacion ?? "",
+  };
+}
+
 export function FormularioContacto({
   clientes,
   cargos,
+  contacto,
   onCerrar,
 }: {
   clientes: ClienteSelector[];
   /** Los cargos ya usados por el equipo: el campo es texto libre en Airtable. */
   cargos: string[];
+  /** Presente al editar; ausente al crear uno nuevo. */
+  contacto?: FilaContacto;
   onCerrar: () => void;
 }) {
   const router = useRouter();
   const dialogoRef = useRef<HTMLDivElement>(null);
+  const editando = Boolean(contacto);
 
-  const [datos, setDatos] = useState<Formulario>(VACIO);
+  const [datos, setDatos] = useState<Formulario>(
+    contacto ? desdeContacto(contacto) : VACIO,
+  );
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function actualizar(cambios: Partial<Formulario>) {
     setDatos((previos) => ({ ...previos, ...cambios }));
+  }
+
+  /** Marca o desmarca una función, respetando el orden de `TIPOS_CONTACTO`. */
+  function alternarFuncion(funcion: TipoContacto) {
+    setDatos((previos) => ({
+      ...previos,
+      funciones: previos.funciones.includes(funcion)
+        ? previos.funciones.filter((actual) => actual !== funcion)
+        : TIPOS_CONTACTO.filter(
+            (actual) =>
+              actual === funcion || previos.funciones.includes(actual),
+          ),
+    }));
   }
 
   /* Atajos: Esc cierra, Ctrl+Enter guarda */
@@ -72,7 +109,7 @@ export function FormularioContacto({
       setError("Escribe el nombre completo del contacto.");
       return;
     }
-    if (!datos.cliente) {
+    if (!editando && !datos.cliente) {
       setError("Elige el cliente al que pertenece.");
       return;
     }
@@ -80,11 +117,17 @@ export function FormularioContacto({
     setGuardando(true);
     setError(null);
 
-    const respuesta = await fetch("/api/contactos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(datos),
-    });
+    const respuesta = contacto
+      ? await fetch(`/api/contactos/${contacto.recordId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accion: "datos", ...datos }),
+        })
+      : await fetch("/api/contactos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(datos),
+        });
 
     setGuardando(false);
 
@@ -113,7 +156,7 @@ export function FormularioContacto({
               id="titulo-contacto"
               className="text-base font-semibold tracking-tight"
             >
-              Nuevo contacto
+              {editando ? "Editar contacto" : "Nuevo contacto"}
             </h2>
             <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
               Se guarda en la base Sirius Clients Core · tabla Personal Cliente
@@ -149,22 +192,70 @@ export function FormularioContacto({
               <label htmlFor="contacto-cliente" className={etiqueta}>
                 Cliente
               </label>
-              <select
-                id="contacto-cliente"
-                required
-                value={datos.cliente}
-                onChange={(e) => actualizar({ cliente: e.target.value })}
-                className={`${input} mt-1 cursor-pointer`}
-              >
-                <option value="">Elige un cliente…</option>
-                {clientes.map((c) => (
-                  <option key={c.recordId} value={c.recordId}>
-                    {c.nombre}
-                    {c.ciudad ? ` — ${c.ciudad}` : ""}
-                  </option>
-                ))}
-              </select>
+              {/* Mover a alguien de empresa no es corregir un dato, así que
+                  al editar el cliente queda fijo. */}
+              {editando ? (
+                <p
+                  id="contacto-cliente"
+                  className={`${input} mt-1 bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-400`}
+                >
+                  {contacto?.clientes.map((c) => c.nombre).join(", ") ||
+                    "Sin cliente"}
+                </p>
+              ) : (
+                <select
+                  id="contacto-cliente"
+                  required
+                  value={datos.cliente}
+                  onChange={(e) => actualizar({ cliente: e.target.value })}
+                  className={`${input} mt-1 cursor-pointer`}
+                >
+                  <option value="">Elige un cliente…</option>
+                  {clientes.map((c) => (
+                    <option key={c.recordId} value={c.recordId}>
+                      {c.nombre}
+                      {c.ciudad ? ` — ${c.ciudad}` : ""}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
+
+            <fieldset>
+              <legend className={etiqueta}>
+                Funciones{" "}
+                <span className="font-normal text-slate-500">(opcional)</span>
+              </legend>
+              {/* Una misma persona puede cubrir varias: en empresas pequeñas
+                  quien compra es quien paga. */}
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                {TIPOS_CONTACTO.map((funcion) => {
+                  const marcada = datos.funciones.includes(funcion);
+                  return (
+                    <label
+                      key={funcion}
+                      className={`flex cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors duration-200 ${
+                        marcada
+                          ? "border-blue-600 bg-blue-50 text-blue-800 dark:border-blue-400 dark:bg-blue-500/15 dark:text-blue-300"
+                          : "border-slate-200 hover:bg-slate-100 dark:border-white/10 dark:hover:bg-white/10"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={marcada}
+                        onChange={() => alternarFuncion(funcion)}
+                        className="h-3.5 w-3.5 cursor-pointer accent-blue-700"
+                      />
+                      {funcion}
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-500">
+                El área a la que escribirle: una cotización va a Compras, una
+                factura a Facturación.
+              </p>
+            </fieldset>
 
             <div>
               <label htmlFor="contacto-cargo" className={etiqueta}>
@@ -273,7 +364,11 @@ export function FormularioContacto({
               disabled={guardando}
               className="cursor-pointer rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white transition-colors duration-200 hover:bg-blue-800 disabled:opacity-60 dark:bg-blue-600 dark:hover:bg-blue-500"
             >
-              {guardando ? "Guardando…" : "Guardar contacto"}
+              {guardando
+                ? "Guardando…"
+                : editando
+                  ? "Guardar cambios"
+                  : "Guardar contacto"}
             </button>
           </div>
         </form>

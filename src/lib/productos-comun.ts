@@ -61,3 +61,29 @@ export function leerPrecio(valor: unknown): number | null | "invalido" {
 
   return numero;
 }
+
+/**
+ * Cruza los códigos que un registro guardó como texto ("SIRIUS-PRODUCT-0001,
+ * SIRIUS-PRODUCT-0004") con el catálogo, y devuelve los que siguen existiendo.
+ *
+ * El catálogo que se le pasa tiene que ser el **completo**, con los
+ * descontinuados incluidos. Cruzar solo contra los vigentes borraría del
+ * registro histórico un producto que se descontinuó después: el catálogo nunca
+ * borra un producto con historial, y esto es la otra mitad de esa regla.
+ */
+export function codigosDelCatalogo(
+  guardados: string | null,
+  catalogo: { codigo: string }[],
+): string[] {
+  const pedidos = new Set(
+    (guardados ?? "")
+      .split(",")
+      .map((codigo) => codigo.trim())
+      .filter(Boolean),
+  );
+
+  // Se recorre el catálogo, no lo guardado, para que el orden sea estable.
+  return catalogo
+    .filter((producto) => pedidos.has(producto.codigo))
+    .map((producto) => producto.codigo);
+}

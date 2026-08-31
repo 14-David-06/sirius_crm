@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { crearContacto, listarContactos } from "@/lib/clientes";
+import { leerFunciones } from "@/lib/clientes-comun";
 import { permisosDe } from "@/lib/permisos";
 import { ETIQUETAS, invalidar } from "@/lib/cache";
 import { getSession } from "@/lib/session";
@@ -60,6 +61,7 @@ export async function POST(request: Request) {
   const cliente = cadena(body.cliente);
   const email = cadena(body.email);
   const emailNotificacion = cadena(body.emailNotificacion);
+  const funciones = leerFunciones(body.funciones);
 
   if (!nombre) {
     return NextResponse.json(
@@ -86,6 +88,12 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  if (funciones === "invalido") {
+    return NextResponse.json(
+      { error: "Alguna de las funciones no es una de las definidas." },
+      { status: 400 },
+    );
+  }
 
   try {
     const contacto = await crearContacto({
@@ -93,6 +101,7 @@ export async function POST(request: Request) {
       cliente,
       autorId: session.idEmpleado,
       cargo: cadena(body.cargo) ?? undefined,
+      funciones,
       cedula: cadena(body.cedula) ?? undefined,
       email: email ?? undefined,
       emailNotificacion: emailNotificacion ?? undefined,

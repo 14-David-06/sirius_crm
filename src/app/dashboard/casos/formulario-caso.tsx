@@ -3,16 +3,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import type { Caso } from "@/lib/casos";
 import {
   ESTADOS_CASO,
-  TIPOS_CASO,
+  exigeSolucion,
+  TIPOS_CASO_ANTERIORES,
+  TIPOS_PQRSF,
   type EstadoCaso,
   type TipoCaso,
 } from "@/lib/casos-comun";
 import type { ClienteCore } from "@/lib/clientes";
 import { formatearFecha } from "@/lib/fechas";
 import { IconClose } from "../icons";
-import type { VisitaOrigen } from "./modulo";
+import type { ContactoCaso, VisitaOrigen } from "./modulo";
 
 const input =
   "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-500 focus:border-blue-600 disabled:opacity-60 dark:border-white/10 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:border-blue-400";
@@ -26,12 +29,16 @@ const ESTADOS_INICIALES = ESTADOS_CASO.filter(
 
 type Formulario = {
   clienteId: string;
+  /** Codigo Persona Cliente de quien reportó el caso; "" si no se anotó. */
+  contactoCodigo: string;
   fechaApertura: string;
   tipo: TipoCaso;
   descripcion: string;
   responsableId: string;
   estado: "Abierto" | "En proceso";
   fechaLimite: string;
+  seguimiento: string;
+  solucionFinal: string;
   observaciones: string;
   visitaOrigen: string;
 };
@@ -39,28 +46,62 @@ type Formulario = {
 function vacio(hoy: string, idEmpleado: string): Formulario {
   return {
     clienteId: "",
+    contactoCodigo: "",
     fechaApertura: hoy,
-    tipo: "Comercial",
+    // PQRSF es lo que se ofrece por defecto al abrir un caso nuevo.
+    tipo: "Petición",
     descripcion: "",
     responsableId: idEmpleado,
     estado: "Abierto",
     fechaLimite: "",
+    seguimiento: "",
+    solucionFinal: "",
     observaciones: "",
     visitaOrigen: "",
   };
 }
 
+/** Precarga el formulario con lo que ya tiene el caso que se va a corregir. */
+function desdeCaso(
+  caso: Caso,
+  clientes: ClienteCore[],
+  hoy: string,
+  idEmpleado: string,
+): Formulario {
+  return {
+    ...vacio(hoy, idEmpleado),
+    // El cliente no se edita, pero se resuelve desde su serial para poder
+    // filtrar los contactos. Queda vacío si el cliente está inactivo.
+    clienteId:
+      clientes.find((cliente) => cliente.id === caso.idClienteCore)?.recordId ??
+      "",
+    contactoCodigo: caso.idContactoCore ?? "",
+    fechaApertura: caso.fechaApertura ?? hoy,
+    tipo: (caso.tipo as TipoCaso) ?? "Petición",
+    descripcion: caso.descripcion ?? "",
+    fechaLimite: caso.fechaLimite ?? "",
+    seguimiento: caso.seguimiento ?? "",
+    solucionFinal: caso.solucionFinal ?? "",
+    observaciones: caso.observaciones ?? "",
+  };
+}
+
 export function FormularioCaso({
   clientes,
+  contactos,
   visitas,
   personal,
+  caso,
   sesion,
   hoy,
   onCerrar,
 }: {
   clientes: ClienteCore[];
+  contactos: ContactoCaso[];
   visitas: VisitaOrigen[];
   personal: { nombre: string; rol: string | null; idEmpleado: string }[];
+  /** Presente al corregir un caso ya abierto; ausente al abrir uno nuevo. */
+  caso?: Caso;
   sesion: { idEmpleado: string; nombre: string };
   hoy: string;
   onCerrar: () => void;
@@ -69,8 +110,15 @@ export function FormularioCaso({
   const dialogoRef = useRef<HTMLDivElement>(null);
 
   const { idEmpleado, nombre: usuario } = sesion;
+  const editando = Boolean(caso);
+  // Un caso ya cerrado no puede quedarse sin la respuesta que lo cerró.
+  const solucionObligatoria = exigeSolucion(caso?.estado ?? null);
 
-  const [datos, setDatos] = useState<Formulario>(() => vacio(hoy, sesion.idEmpleado));
+  const [datos, setDatos] = useState<Formulario>(() =>
+    caso
+      ? desdeCaso(caso, clientes, hoy, sesion.idEmpleado)
+      : vacio(hoy, sesion.idEmpleado),
+  );
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -87,6 +135,17 @@ export function FormularioCaso({
       )
       .slice(0, 20);
   }, [visitas, cliente]);
+
+  /**
+   * Los contactos del cliente. El ya anotado se ofrece siempre, aunque esté
+   * inactivo: si no, corregir otro campo de un caso viejo lo borraría en
+   * silencio.
+   */
+  const contactosDelCliente = contactos.filter(
+    (contacto) =>
+      contacto.codigo === datos.contactoCodigo ||
+      (contacto.activo && contacto.clientes.includes(datos.clienteId)),
+  );
 
   function actualizar(cambios: Partial<Formulario>) {
     setDatos((previos) => ({ ...previos, ...cambios }));
@@ -109,7 +168,8 @@ export function FormularioCaso({
   async function guardar(evento: React.FormEvent) {
     evento.preventDefault();
 
-    if (!cliente) {
+    // Al editar el cliente no se toca: viene del registro, no del formulario.
+    if (!editando && !cliente) {
       setError("Elige el cliente que abrió el requerimiento.");
       return;
     }
@@ -121,26 +181,49 @@ export function FormularioCaso({
       setError("La fecha límite no puede ser anterior a la apertura.");
       return;
     }
+    if (solucionObligatoria && !datos.solucionFinal.trim()) {
+      setError(
+        "Este caso está cerrado: no puedes dejarlo sin solución o respuesta final.",
+      );
+      return;
+    }
 
     setGuardando(true);
     setError(null);
 
-    const respuesta = await fetch("/api/casos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        idClienteCore: cliente.id,
-        cliente: cliente.nombre,
-        fechaApertura: datos.fechaApertura,
-        tipo: datos.tipo,
-        descripcion: datos.descripcion,
-        responsableId: datos.responsableId,
-        estado: datos.estado,
-        fechaLimite: datos.fechaLimite,
-        observaciones: datos.observaciones,
-        visitaOrigen: datos.visitaOrigen,
-      }),
-    });
+    const respuesta = caso
+      ? await fetch(`/api/casos/${caso.recordId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            accion: "datos",
+            idContactoCore: datos.contactoCodigo,
+            tipo: datos.tipo,
+            descripcion: datos.descripcion,
+            fechaLimite: datos.fechaLimite,
+            seguimiento: datos.seguimiento,
+            solucionFinal: datos.solucionFinal,
+            observaciones: datos.observaciones,
+          }),
+        })
+      : await fetch("/api/casos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            idClienteCore: cliente?.id,
+            cliente: cliente?.nombre,
+            idContactoCore: datos.contactoCodigo,
+            fechaApertura: datos.fechaApertura,
+            tipo: datos.tipo,
+            descripcion: datos.descripcion,
+            responsableId: datos.responsableId,
+            estado: datos.estado,
+            fechaLimite: datos.fechaLimite,
+            seguimiento: datos.seguimiento,
+            observaciones: datos.observaciones,
+            visitaOrigen: datos.visitaOrigen,
+          }),
+        });
 
     setGuardando(false);
 
@@ -169,10 +252,13 @@ export function FormularioCaso({
               id="titulo-caso"
               className="text-base font-semibold tracking-tight"
             >
-              Abrir caso
+              {editando ? `Editar caso ${caso?.id ?? ""}` : "Abrir caso"}
             </h2>
             <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
               Se guarda en la base Sirius CRM · tabla Casos
+              {editando
+                ? " · el estado se cambia desde el listado"
+                : ""}
             </p>
           </div>
           <button
@@ -187,25 +273,71 @@ export function FormularioCaso({
 
         <form onSubmit={guardar} className="px-5 py-5">
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="sm:col-span-2">
+            <div>
               <label htmlFor="caso-cliente" className={etiqueta}>
                 Cliente
               </label>
+              {/* Un caso de otra empresa es otro caso, no una corrección. */}
+              {editando ? (
+                <p
+                  id="caso-cliente"
+                  className={`${input} mt-1 bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-400`}
+                >
+                  {caso?.cliente ?? "Sin cliente"}
+                </p>
+              ) : (
+                <select
+                  id="caso-cliente"
+                  required
+                  value={datos.clienteId}
+                  onChange={(e) =>
+                    // La visita de origen y el contacto eran del cliente
+                    // anterior: se descartan.
+                    actualizar({
+                      clienteId: e.target.value,
+                      visitaOrigen: "",
+                      contactoCodigo: "",
+                    })
+                  }
+                  className={`${input} mt-1 cursor-pointer`}
+                >
+                  <option value="">Elige un cliente…</option>
+                  {clientes.map((c) => (
+                    <option key={c.recordId} value={c.recordId}>
+                      {c.nombre}
+                      {c.ciudad ? ` — ${c.ciudad}` : ""}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="caso-contacto" className={etiqueta}>
+                Contacto que reportó{" "}
+                <span className="font-normal text-slate-500">(opcional)</span>
+              </label>
               <select
-                id="caso-cliente"
-                required
-                value={datos.clienteId}
+                id="caso-contacto"
+                value={datos.contactoCodigo}
+                disabled={!datos.clienteId && !datos.contactoCodigo}
                 onChange={(e) =>
-                  // La visita de origen era del cliente anterior: se descarta.
-                  actualizar({ clienteId: e.target.value, visitaOrigen: "" })
+                  actualizar({ contactoCodigo: e.target.value })
                 }
                 className={`${input} mt-1 cursor-pointer`}
               >
-                <option value="">Elige un cliente…</option>
-                {clientes.map((c) => (
-                  <option key={c.recordId} value={c.recordId}>
-                    {c.nombre}
-                    {c.ciudad ? ` — ${c.ciudad}` : ""}
+                <option value="">
+                  {datos.clienteId || datos.contactoCodigo
+                    ? "Sin anotar"
+                    : "Elige primero el cliente"}
+                </option>
+                {contactosDelCliente.map((contacto) => (
+                  <option key={contacto.codigo} value={contacto.codigo}>
+                    {contacto.nombre}
+                    {contacto.funciones.length > 0
+                      ? ` · ${contacto.funciones.join(", ")}`
+                      : ""}
+                    {contacto.activo ? "" : " (inactivo)"}
                   </option>
                 ))}
               </select>
@@ -223,15 +355,26 @@ export function FormularioCaso({
                 }
                 className={`${input} mt-1 cursor-pointer`}
               >
-                {TIPOS_CASO.map((tipo) => (
-                  <option key={tipo} value={tipo}>
-                    {tipo}
-                  </option>
-                ))}
+                <optgroup label="PQRSF">
+                  {TIPOS_PQRSF.map((tipo) => (
+                    <option key={tipo} value={tipo}>
+                      {tipo}
+                    </option>
+                  ))}
+                </optgroup>
+                {/* Se conservan para no dejar huérfanos los casos ya abiertos
+                    con la clasificación anterior. */}
+                <optgroup label="Clasificación anterior">
+                  {TIPOS_CASO_ANTERIORES.map((tipo) => (
+                    <option key={tipo} value={tipo}>
+                      {tipo}
+                    </option>
+                  ))}
+                </optgroup>
               </select>
             </div>
 
-            <div>
+            <div className={editando ? "hidden" : undefined}>
               <label htmlFor="caso-estado" className={etiqueta}>
                 Estado inicial
               </label>
@@ -268,7 +411,7 @@ export function FormularioCaso({
               />
             </div>
 
-            <div>
+            <div className={editando ? "hidden" : undefined}>
               <label htmlFor="caso-responsable" className={etiqueta}>
                 Responsable
               </label>
@@ -292,7 +435,7 @@ export function FormularioCaso({
               </select>
             </div>
 
-            <div>
+            <div className={editando ? "hidden" : undefined}>
               <label htmlFor="caso-apertura" className={etiqueta}>
                 Fecha de apertura
               </label>
@@ -324,7 +467,7 @@ export function FormularioCaso({
               </p>
             </div>
 
-            <div>
+            <div className={editando ? "hidden" : undefined}>
               <label htmlFor="caso-visita" className={etiqueta}>
                 Visita de origen{" "}
                 <span className="font-normal text-slate-500">(opcional)</span>
@@ -351,6 +494,49 @@ export function FormularioCaso({
                 ))}
               </select>
             </div>
+
+            <div className="sm:col-span-2">
+              <label htmlFor="caso-seguimiento" className={etiqueta}>
+                Seguimiento{" "}
+                <span className="font-normal text-slate-500">(opcional)</span>
+              </label>
+              <textarea
+                id="caso-seguimiento"
+                rows={3}
+                value={datos.seguimiento}
+                onChange={(e) => actualizar({ seguimiento: e.target.value })}
+                placeholder="Qué se ha hecho hasta ahora: se llamó al cliente, se programó visita técnica…"
+                className={`${input} mt-1 resize-y`}
+              />
+            </div>
+
+            {/* Solo al editar: al abrir el caso todavía no hay respuesta. */}
+            {editando ? (
+              <div className="sm:col-span-2">
+                <label htmlFor="caso-solucion" className={etiqueta}>
+                  Solución o respuesta final
+                  {solucionObligatoria ? (
+                    <span className="text-red-600 dark:text-red-400"> *</span>
+                  ) : (
+                    <span className="font-normal text-slate-500">
+                      {" "}
+                      (obligatoria al cerrar)
+                    </span>
+                  )}
+                </label>
+                <textarea
+                  id="caso-solucion"
+                  rows={3}
+                  required={solucionObligatoria}
+                  value={datos.solucionFinal}
+                  onChange={(e) =>
+                    actualizar({ solucionFinal: e.target.value })
+                  }
+                  placeholder="Lo que se le respondió al cliente y cómo quedó el caso."
+                  className={`${input} mt-1 resize-y`}
+                />
+              </div>
+            ) : null}
 
             <div className="sm:col-span-2">
               <label htmlFor="caso-observaciones" className={etiqueta}>
@@ -389,7 +575,11 @@ export function FormularioCaso({
               disabled={guardando}
               className="cursor-pointer rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white transition-colors duration-200 hover:bg-blue-800 disabled:opacity-60 dark:bg-blue-600 dark:hover:bg-blue-500"
             >
-              {guardando ? "Guardando…" : "Abrir caso"}
+              {guardando
+                ? "Guardando…"
+                : editando
+                  ? "Guardar cambios"
+                  : "Abrir caso"}
             </button>
           </div>
         </form>

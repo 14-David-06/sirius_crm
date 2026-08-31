@@ -8,6 +8,8 @@ import { hoyEnBogota } from "@/lib/crm";
 import { cachearLectura, ETIQUETAS } from "@/lib/cache";
 import {
   alertaPorFecha,
+  anotarHistorial,
+  describirCambio,
   estaCerrado,
   type AlertaSla,
   type EstadoCaso,
@@ -25,15 +27,20 @@ const CAMPOS_CASO = {
   id: "ID",
   idClienteCore: "ID Cliente Core",
   cliente: "Cliente",
+  idContactoCore: "ID Contacto Cliente",
   fechaApertura: "Fecha Apertura",
   tipo: "Tipo de Requerimiento",
   descripcion: "Descripción",
   responsable: "Responsable",
   idPersonalCore: "ID Personal Core",
+  recibidoPor: "Recibido Por ID",
   modificadoPor: "Modificado Por ID",
   estado: "Estado",
   fechaLimite: "Fecha Límite",
   fechaCierre: "Fecha de Cierre",
+  seguimiento: "Seguimiento",
+  solucionFinal: "Solucion Final",
+  historial: "Historial",
   observaciones: "Observaciones",
   visitaOrigen: "Visita Origen",
   diasAbierto: "Días Abierto",
@@ -42,13 +49,17 @@ const CAMPOS_CASO = {
 export {
   ESTADOS_CASO,
   estaCerrado,
+  exigeSolucion,
   TIPOS_CASO,
+  TIPOS_CASO_ANTERIORES,
+  TIPOS_PQRSF,
   alertaPorFecha,
 } from "@/lib/casos-comun";
 export type {
   AlertaSla,
   EstadoCaso,
   TipoCaso,
+  TipoPqrsf,
 } from "@/lib/casos-comun";
 
 export type Caso = {
@@ -56,17 +67,27 @@ export type Caso = {
   id: string;
   idClienteCore: string | null;
   cliente: string;
+  /** Codigo Persona Cliente de quien reportó el caso; null si no se anotó. */
+  idContactoCore: string | null;
   fechaApertura: string | null;
   tipo: string | null;
   descripcion: string | null;
   responsable: string | null;
-  /** ID Empleado de quien lo abrió; es la clave de propiedad. */
+  /** ID Empleado del responsable del trámite; es la clave de propiedad. */
   idPersonalCore: string | null;
+  /** ID Empleado de quien lo recibió o digitó; puede no ser el responsable. */
+  recibidoPor: string | null;
   /** ID Empleado de quien lo modificó por última vez desde el CRM. */
   modificadoPor: string | null;
   estado: string | null;
   fechaLimite: string | null;
   fechaCierre: string | null;
+  /** Bitácora de gestión: qué se ha hecho hasta ahora. */
+  seguimiento: string | null;
+  /** La respuesta que se le dio al cliente. Obligatoria al cerrar. */
+  solucionFinal: string | null;
+  /** Traza de cambios, solo de lectura: se agrega, nunca se reescribe. */
+  historial: string | null;
   observaciones: string | null;
   visitaOrigen: string[];
   diasAbierto: number | null;
@@ -110,15 +131,20 @@ function aCaso(
     id: texto(f[CAMPOS_CASO.id]) ?? registro.id,
     idClienteCore: texto(f[CAMPOS_CASO.idClienteCore]),
     cliente: texto(f[CAMPOS_CASO.cliente]) ?? "Sin cliente",
+    idContactoCore: texto(f[CAMPOS_CASO.idContactoCore]),
     fechaApertura: soloDia(f[CAMPOS_CASO.fechaApertura]),
     tipo: texto(f[CAMPOS_CASO.tipo]),
     descripcion: texto(f[CAMPOS_CASO.descripcion]),
     responsable: texto(f[CAMPOS_CASO.responsable]),
     idPersonalCore: texto(f[CAMPOS_CASO.idPersonalCore]),
+    recibidoPor: texto(f[CAMPOS_CASO.recibidoPor]),
     modificadoPor: texto(f[CAMPOS_CASO.modificadoPor]),
     estado,
     fechaLimite,
     fechaCierre: soloDia(f[CAMPOS_CASO.fechaCierre]),
+    seguimiento: texto(f[CAMPOS_CASO.seguimiento]),
+    solucionFinal: texto(f[CAMPOS_CASO.solucionFinal]),
+    historial: texto(f[CAMPOS_CASO.historial]),
     observaciones: texto(f[CAMPOS_CASO.observaciones]),
     visitaOrigen: idsEnlazados(f[CAMPOS_CASO.visitaOrigen]),
     diasAbierto: numero(f[CAMPOS_CASO.diasAbierto]),
@@ -127,7 +153,8 @@ function aCaso(
 }
 
 const leerCasos = cachearLectura(
-  "casos",
+  // v2: `Caso` sumó contacto, receptor, seguimiento, solución e historial.
+  "casos-v2",
   ETIQUETAS.casos,
   async (): Promise<Caso[]> => {
     const registros = await listarRegistros(env.baseCrm, env.tablaCasos, {
@@ -163,6 +190,7 @@ export async function listarCasosPendientes(): Promise<Caso[]> {
 export type EntradaCaso = {
   idClienteCore: string | null;
   cliente: string;
+  idContactoCore?: string;
   fechaApertura: string;
   tipo: TipoCaso;
   descripcion: string;
@@ -173,6 +201,7 @@ export type EntradaCaso = {
   autorId: string;
   estado: EstadoCaso;
   fechaLimite?: string;
+  seguimiento?: string;
   observaciones?: string;
   visitaOrigen?: string;
 };
@@ -181,14 +210,25 @@ export async function crearCaso(entrada: EntradaCaso): Promise<Caso> {
   const fields: Record<string, unknown> = {
     [CAMPOS_CASO.idClienteCore]: entrada.idClienteCore ?? "",
     [CAMPOS_CASO.cliente]: entrada.cliente,
+    [CAMPOS_CASO.idContactoCore]: entrada.idContactoCore ?? "",
     [CAMPOS_CASO.fechaApertura]: entrada.fechaApertura,
     [CAMPOS_CASO.tipo]: entrada.tipo,
     [CAMPOS_CASO.descripcion]: entrada.descripcion,
     [CAMPOS_CASO.responsable]: entrada.responsable,
     [CAMPOS_CASO.idPersonalCore]: entrada.idPersonalCore,
+    // Quien digita queda registrado aparte del responsable del trámite: en
+    // atención al cliente casi nunca son la misma persona.
+    [CAMPOS_CASO.recibidoPor]: entrada.autorId,
     [CAMPOS_CASO.modificadoPor]: entrada.autorId,
     [CAMPOS_CASO.estado]: entrada.estado,
+    [CAMPOS_CASO.seguimiento]: entrada.seguimiento ?? "",
     [CAMPOS_CASO.observaciones]: entrada.observaciones ?? "",
+    [CAMPOS_CASO.historial]: anotarHistorial(
+      null,
+      `Caso abierto como ${entrada.tipo}, responsable ${entrada.responsable}`,
+      entrada.fechaApertura,
+      entrada.autorId,
+    ),
   };
 
   // Airtable rechaza una fecha vacía: el campo se omite si no hay plazo.
@@ -206,46 +246,137 @@ export async function crearCaso(entrada: EntradaCaso): Promise<Caso> {
 /**
  * Cambia el estado del caso. Resolver o cerrar sella la fecha de cierre;
  * reabrir la borra, para que "Días Abierto" vuelva a contar desde la apertura.
+ *
+ * Recibe el caso tal como está para poder anotar la bitácora sin releerlo:
+ * quien llama ya lo tuvo que leer para comprobar el permiso.
  */
 export async function cambiarEstadoCaso(
-  recordId: string,
+  actual: Caso,
   estado: EstadoCaso,
   observaciones: string | null,
   autorId: string,
+  /** Obligatoria al cerrar; se conserva la existente si no viene una nueva. */
+  solucionFinal?: string | null,
 ): Promise<Caso> {
+  const hoy = hoyEnBogota();
+  const cierra = estaCerrado(estado);
+
   const fields: Record<string, unknown> = {
     [CAMPOS_CASO.estado]: estado,
-    [CAMPOS_CASO.fechaCierre]: estaCerrado(estado) ? hoyEnBogota() : null,
+    [CAMPOS_CASO.fechaCierre]: cierra ? hoy : null,
     [CAMPOS_CASO.modificadoPor]: autorId,
+    [CAMPOS_CASO.historial]: anotarHistorial(
+      actual.historial,
+      `Estado: ${actual.estado ?? "sin estado"} → ${estado}`,
+      hoy,
+      autorId,
+    ),
   };
 
   if (observaciones !== null) {
     fields[CAMPOS_CASO.observaciones] = observaciones;
   }
+  if (solucionFinal !== undefined && solucionFinal !== null) {
+    fields[CAMPOS_CASO.solucionFinal] = solucionFinal;
+  }
 
   const registro = await actualizarRegistro(
     env.baseCrm,
     env.tablaCasos,
-    recordId,
+    actual.recordId,
     fields,
   );
-  return aCaso(registro, hoyEnBogota());
+  return aCaso(registro, hoy);
+}
+
+/**
+ * Lo que se puede corregir de un caso ya abierto.
+ *
+ * El cliente y el estado no están aquí: el primero porque un caso de otra
+ * empresa es otro caso; el segundo porque tiene su propia acción, que sella la
+ * fecha de cierre y exige la solución final.
+ */
+export type CambiosCaso = {
+  idContactoCore: string | null;
+  tipo: TipoCaso;
+  descripcion: string;
+  fechaLimite: string | null;
+  seguimiento: string | null;
+  solucionFinal: string | null;
+  observaciones: string | null;
+};
+
+export async function actualizarCaso(
+  actual: Caso,
+  datos: CambiosCaso,
+  autorId: string,
+): Promise<Caso> {
+  const hoy = hoyEnBogota();
+
+  // Solo se anota lo que de verdad cambió: una bitácora que registra cada
+  // apertura del formulario no sirve para rastrear nada.
+  const cambios = [
+    describirCambio("Tipo", actual.tipo, datos.tipo),
+    describirCambio("Descripción", actual.descripcion, datos.descripcion),
+    describirCambio("Contacto", actual.idContactoCore, datos.idContactoCore),
+    describirCambio("Fecha límite", actual.fechaLimite, datos.fechaLimite),
+    describirCambio("Seguimiento", actual.seguimiento, datos.seguimiento),
+    describirCambio("Solución", actual.solucionFinal, datos.solucionFinal),
+    describirCambio("Observaciones", actual.observaciones, datos.observaciones),
+  ].filter((cambio): cambio is string => cambio !== null);
+
+  const fields: Record<string, unknown> = {
+    [CAMPOS_CASO.idContactoCore]: datos.idContactoCore ?? "",
+    [CAMPOS_CASO.tipo]: datos.tipo,
+    [CAMPOS_CASO.descripcion]: datos.descripcion,
+    // Una fecha se vacía con null: "" no es una fecha y Airtable la rechaza.
+    [CAMPOS_CASO.fechaLimite]: datos.fechaLimite,
+    [CAMPOS_CASO.seguimiento]: datos.seguimiento ?? "",
+    [CAMPOS_CASO.solucionFinal]: datos.solucionFinal ?? "",
+    [CAMPOS_CASO.observaciones]: datos.observaciones ?? "",
+    [CAMPOS_CASO.modificadoPor]: autorId,
+  };
+
+  if (cambios.length > 0) {
+    fields[CAMPOS_CASO.historial] = anotarHistorial(
+      actual.historial,
+      cambios.join(" · "),
+      hoy,
+      autorId,
+    );
+  }
+
+  const registro = await actualizarRegistro(
+    env.baseCrm,
+    env.tablaCasos,
+    actual.recordId,
+    fields,
+  );
+  return aCaso(registro, hoy);
 }
 
 /** Mueve la fecha límite de respuesta sin tocar el estado. */
 export async function reprogramarLimite(
-  recordId: string,
+  actual: Caso,
   fecha: string,
   autorId: string,
 ): Promise<Caso> {
+  const hoy = hoyEnBogota();
+
   const registro = await actualizarRegistro(
     env.baseCrm,
     env.tablaCasos,
-    recordId,
+    actual.recordId,
     {
       [CAMPOS_CASO.fechaLimite]: fecha,
       [CAMPOS_CASO.modificadoPor]: autorId,
+      [CAMPOS_CASO.historial]: anotarHistorial(
+        actual.historial,
+        `Fecha límite: ${actual.fechaLimite ?? "sin plazo"} → ${fecha}`,
+        hoy,
+        autorId,
+      ),
     },
   );
-  return aCaso(registro, hoyEnBogota());
+  return aCaso(registro, hoy);
 }

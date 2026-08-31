@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { alertaPorFecha, ESTADOS_CASO, estaCerrado, TIPOS_CASO } from "@/lib/casos-comun";
+import {
+  alertaPorFecha,
+  anotarHistorial,
+  describirCambio,
+  ESTADOS_CASO,
+  estaCerrado,
+  exigeSolucion,
+  TIPOS_CASO,
+} from "@/lib/casos-comun";
 
 const HOY = "2026-08-27";
 
@@ -45,12 +53,97 @@ describe("catálogos", () => {
       "Resuelto",
       "Cerrado",
     ]);
+    // PQRSF primero, que es lo que se ofrece al abrir un caso nuevo; después
+    // la clasificación anterior, que se conserva para los ya registrados.
     expect([...TIPOS_CASO]).toEqual([
+      "Petición",
+      "Queja",
+      "Reclamo",
+      "Sugerencia",
+      "Felicitación",
+      "Otro",
       "Comercial",
       "Técnico o agronómico",
       "Queja o reclamo",
       "Solicitud de información",
-      "Otro",
     ]);
+  });
+});
+
+describe("anotarHistorial", () => {
+  it("crea la primera línea con fecha y autor", () => {
+    expect(anotarHistorial(null, "Caso abierto", "2026-08-31", "SIRIUS-PER-0001"))
+      .toBe("[2026-08-31] SIRIUS-PER-0001 · Caso abierto");
+  });
+
+  it("agrega al final sin tocar lo anterior", () => {
+    const previo = "[2026-08-30] SIRIUS-PER-0001 · Caso abierto";
+    const nuevo = anotarHistorial(
+      previo,
+      "Estado: Abierto → Resuelto",
+      "2026-08-31",
+      "SIRIUS-PER-0002",
+    );
+
+    expect(nuevo.startsWith(previo)).toBe(true);
+    expect(nuevo.split("\n")).toHaveLength(2);
+    expect(nuevo).toContain("Estado: Abierto → Resuelto");
+  });
+
+  it("no deja una línea en blanco si el historial venía vacío", () => {
+    expect(anotarHistorial("   ", "algo", "2026-08-31", "X")).toBe(
+      "[2026-08-31] X · algo",
+    );
+  });
+
+  it("sigue anotando aunque la sesión no traiga ID de empleado", () => {
+    expect(anotarHistorial(null, "algo", "2026-08-31", "")).toContain("sin ID");
+  });
+});
+
+describe("describirCambio", () => {
+  it("no anota nada cuando el valor no cambió", () => {
+    expect(describirCambio("Tipo", "Queja", "Queja")).toBeNull();
+    // Vacío, nulo y espacios son el mismo "sin dato".
+    expect(describirCambio("Nota", null, "  ")).toBeNull();
+  });
+
+  it("distingue agregar, borrar y cambiar", () => {
+    expect(describirCambio("Nota", null, "hola")).toBe("Nota: se agregó");
+    expect(describirCambio("Nota", "hola", null)).toBe("Nota: se borró");
+    expect(describirCambio("Tipo", "Queja", "Reclamo")).toBe(
+      "Tipo: «Queja» → «Reclamo»",
+    );
+  });
+
+  it("no copia textos largos: la bitácora quedaría ilegible", () => {
+    const largo = "x".repeat(80);
+    expect(describirCambio("Descripción", "corto", largo)).toBe(
+      "Descripción: cambió",
+    );
+  });
+});
+
+describe("exigeSolucion", () => {
+  it("solo al resolver o cerrar", () => {
+    expect(exigeSolucion("Resuelto")).toBe(true);
+    expect(exigeSolucion("Cerrado")).toBe(true);
+    expect(exigeSolucion("Abierto")).toBe(false);
+    expect(exigeSolucion("En proceso")).toBe(false);
+    expect(exigeSolucion(null)).toBe(false);
+  });
+});
+
+describe("TIPOS_CASO", () => {
+  it("ofrece PQRSF sin descartar la clasificación anterior", () => {
+    // Los casos ya abiertos con los tipos viejos siguen siendo válidos.
+    expect(TIPOS_CASO).toContain("Petición");
+    expect(TIPOS_CASO).toContain("Felicitación");
+    expect(TIPOS_CASO).toContain("Comercial");
+    expect(TIPOS_CASO).toContain("Queja o reclamo");
+  });
+
+  it("no repite «Otro» entre los dos grupos", () => {
+    expect(TIPOS_CASO.filter((t) => t === "Otro")).toHaveLength(1);
   });
 });

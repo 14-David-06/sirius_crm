@@ -16,12 +16,15 @@ export type ResultadoDictado = {
   objetivo: string;
   necesidad: string;
   proximaAccion: string;
+  pendientes: string;
   observaciones: string;
   tipo: string | null;
   resultado: string | null;
   productos: string[];
   fechaSeguimiento: string | null;
   cliente: string | null;
+  /** Nombre del contacto que se nombró; quien llama lo cruza con su serial. */
+  contacto: string | null;
 };
 
 const DIAS_SEMANA = [
@@ -110,6 +113,7 @@ type CampoDictado =
   | "objetivo"
   | "necesidad"
   | "proximaAccion"
+  | "pendientes"
   | "observaciones"
   | "fechaSeguimiento";
 
@@ -131,7 +135,12 @@ const MARCADORES: { campo: CampoDictado; patron: RegExp }[] = [
       /\b(?:la\s+)?proxima\s+accion\s*(?:es|sera|va\s+a\s+ser|seria)?\b|\b(?:el\s+)?compromiso\s*(?:es|fue)?\b/g,
   },
   {
-    campo: "observaciones",
+    campo: "pendientes",
+    patron:
+      /\b(?:los\s+)?pendientes?\s*(?:son|es|quedan|queda|fueron)?\b|\b(?:queda|quedan|quedo|quedaron)\s+pendientes?\b/g,
+  },
+  {
+        campo: "observaciones",
     patron:
       /\b(?:las\s+)?observaciones\s*(?:son|fueron|es)?\b|\b(?:la\s+)?observacion\s*(?:es|fue)?\b|\bcomo\s+(?:nota|observacion)\b/g,
   },
@@ -147,6 +156,8 @@ export function interpretarDictado(
   opciones: {
     productos?: ProductoDictado[];
     clientes?: string[];
+    /** Nombres de los contactos entre los que buscar. */
+    contactos?: string[];
     hoy: string;
   },
 ): ResultadoDictado {
@@ -173,19 +184,24 @@ export function interpretarDictado(
   // perderse. Pero si algún campo sí recibió texto, un objetivo vacío es
   // correcto: repetirlo dejaría el mismo párrafo en dos casillas.
   const huboReparto = Boolean(
-    necesidad || proximaAccion || segmentos.observaciones,
+    necesidad ||
+      proximaAccion ||
+      segmentos.pendientes ||
+      segmentos.observaciones,
   );
 
   return {
     objetivo: objetivo || (huboReparto ? "" : texto.trim()),
     necesidad,
     proximaAccion,
+    pendientes: segmentos.pendientes,
     observaciones: segmentos.observaciones,
     tipo: detectarTipo(plano),
     resultado: detectarResultado(plano),
     productos: detectarProductos(plano, opciones.productos ?? []),
     fechaSeguimiento: fechaRotulada ?? detectarFecha(plano, opciones.hoy),
-    cliente: detectarCliente(plano, opciones.clientes ?? []),
+    cliente: detectarNombre(plano, opciones.clientes ?? []),
+    contacto: detectarNombre(plano, opciones.contactos ?? []),
   };
 }
 
@@ -224,6 +240,7 @@ function separarPorMarcadores(
     objetivo: "",
     necesidad: "",
     proximaAccion: "",
+    pendientes: "",
     observaciones: "",
     fechaSeguimiento: "",
   };
@@ -466,26 +483,34 @@ function parecido(a: string, b: string): number {
   return largo === 0 ? 0 : 1 - distancia(a, b) / largo;
 }
 
-function detectarCliente(plano: string, clientes: string[]): string | null {
-  const candidatos = clientes
-    .map((cliente) => ({
-      cliente,
-      nombre: normalizar(cliente).replace(SUFIJOS_LEGALES, "").trim(),
+/**
+ * Busca cuál de una lista de nombres se dijo en el dictado.
+ *
+ * Sirve igual para el cliente que para el contacto: en los dos casos Whisper
+ * transcribe un nombre propio de oído y hay que reconocerlo aunque lo escriba
+ * distinto. Primero se intenta la coincidencia literal, que es la fiable, y
+ * solo después la fonética.
+ */
+function detectarNombre(plano: string, nombres: string[]): string | null {
+  const candidatos = nombres
+    .map((original) => ({
+      original,
+      nombre: normalizar(original).replace(SUFIJOS_LEGALES, "").trim(),
     }))
     .filter((c) => c.nombre.length >= 4);
 
   // 1. El nombre aparece tal cual: es lo más confiable, gana el más largo.
-  for (const { cliente, nombre } of [...candidatos].sort(
+  for (const { original, nombre } of [...candidatos].sort(
     (a, b) => b.nombre.length - a.nombre.length,
   )) {
-    if (plano.includes(nombre)) return cliente;
+    if (plano.includes(nombre)) return original;
   }
 
   // 2. Se busca por sonido, tolerando el error de transcripción.
   const palabras = plano.split(/[^a-z0-9]+/).filter(Boolean);
-  let mejor: { cliente: string; puntaje: number } | null = null;
+  let mejor: { original: string; puntaje: number } | null = null;
 
-  for (const { cliente, nombre } of candidatos) {
+  for (const { original, nombre } of candidatos) {
     const clave = esqueleto(nombre);
     if (clave.length < 4) continue;
 
@@ -498,13 +523,13 @@ function detectarCliente(plano: string, clientes: string[]): string | null {
 
         const puntaje = parecido(clave, ventana);
         if (puntaje >= 0.82 && (!mejor || puntaje > mejor.puntaje)) {
-          mejor = { cliente, puntaje };
+          mejor = { original, puntaje };
         }
       }
     }
   }
 
-  return mejor?.cliente ?? null;
+  return mejor?.original ?? null;
 }
 
 /* -------------------------------- Fechas --------------------------------- */

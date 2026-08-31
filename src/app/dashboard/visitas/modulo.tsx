@@ -7,7 +7,7 @@ import type { ClienteCore } from "@/lib/clientes";
 import type { Caso } from "@/lib/casos";
 import type { Visita } from "@/lib/crm";
 import type { Producto } from "@/lib/productos";
-import { motivoSinAcceso, type Permisos } from "@/lib/permisos";
+import { motivoSinAcceso, puedeEditar, type Permisos } from "@/lib/permisos";
 import { RESULTADOS_VISITA, TIPOS_VISITA } from "@/lib/crm-comun";
 import {
   IconCalendar,
@@ -16,6 +16,7 @@ import {
   IconRoute,
   IconSearch,
 } from "../icons";
+import { DetalleVisita } from "./detalle-visita";
 import { FormularioVisita } from "./formulario-visita";
 
 const card =
@@ -40,10 +41,25 @@ const MESES = [
 
 const DIAS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
+/**
+ * Lo que el módulo necesita de un contacto: el serial con el que la visita lo
+ * referencia, el nombre para mostrarlo y los clientes a los que pertenece para
+ * poder filtrar el selector.
+ */
+export type ContactoVisita = {
+  codigo: string;
+  nombre: string;
+  funciones: string[];
+  activo: boolean;
+  /** Record ids de los clientes a los que está vinculado. */
+  clientes: string[];
+};
+
 type Props = {
   visitas: Visita[];
   casos: Caso[];
   clientes: ClienteCore[];
+  contactos: ContactoVisita[];
   productos: Producto[];
   personal: { nombre: string; rol: string | null; idEmpleado: string }[];
   sesion: { idEmpleado: string; nombre: string };
@@ -56,6 +72,7 @@ export function ModuloVisitas({
   visitas,
   casos,
   clientes,
+  contactos,
   productos,
   personal,
   sesion,
@@ -65,6 +82,10 @@ export function ModuloVisitas({
 }: Props) {
   const [vista, setVista] = useState<"lista" | "calendario">("lista");
   const [formularioAbierto, setFormularioAbierto] = useState(false);
+  /** La visita que se está mirando en detalle; null cuando no hay ninguna. */
+  const [enDetalle, setEnDetalle] = useState<Visita | null>(null);
+  /** La que se está corrigiendo. Se abre desde el detalle. */
+  const [enEdicion, setEnEdicion] = useState<Visita | null>(null);
 
   const pendientes = visitas.filter((v) => v.fechaSeguimiento);
   const atrasadas = pendientes.filter(
@@ -130,7 +151,7 @@ export function ModuloVisitas({
       </div>
 
       {vista === "lista" ? (
-        <ListaVisitas visitas={visitas} />
+        <ListaVisitas visitas={visitas} onAbrir={setEnDetalle} />
       ) : (
         <Calendario visitas={visitas} casos={casos} hoy={hoy} />
       )}
@@ -138,6 +159,7 @@ export function ModuloVisitas({
       {formularioAbierto ? (
         <FormularioVisita
           clientes={clientes}
+          contactos={contactos}
           productos={productos}
           personal={personal}
           visitas={visitas}
@@ -145,6 +167,38 @@ export function ModuloVisitas({
           hoy={hoy}
           transcripcionDisponible={transcripcionDisponible}
           onCerrar={() => setFormularioAbierto(false)}
+        />
+      ) : null}
+
+      {/* El detalle se oculta mientras se edita para no apilar dos modales. */}
+      {enDetalle && !enEdicion ? (
+        <DetalleVisita
+          visita={enDetalle}
+          contactos={contactos}
+          puedeEditar={puedeEditar(permisos, enDetalle, sesion)}
+          onEditar={() => setEnEdicion(enDetalle)}
+          onCerrar={() => setEnDetalle(null)}
+        />
+      ) : null}
+
+      {enEdicion ? (
+        <FormularioVisita
+          key={enEdicion.recordId}
+          clientes={clientes}
+          contactos={contactos}
+          productos={productos}
+          personal={personal}
+          visitas={visitas}
+          visita={enEdicion}
+          sesion={sesion}
+          hoy={hoy}
+          transcripcionDisponible={transcripcionDisponible}
+          onCerrar={() => {
+            setEnEdicion(null);
+            // El detalle queda cerrado: sus datos serían los de antes de
+            // guardar, y `router.refresh()` aún no los ha traído.
+            setEnDetalle(null);
+          }}
         />
       ) : null}
     </div>
@@ -199,7 +253,13 @@ const colorEstadoSeguimiento: Record<string, string> = {
     "bg-blue-50 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300",
 };
 
-function ListaVisitas({ visitas }: { visitas: Visita[] }) {
+function ListaVisitas({
+  visitas,
+  onAbrir,
+}: {
+  visitas: Visita[];
+  onAbrir: (visita: Visita) => void;
+}) {
   const [busqueda, setBusqueda] = useState("");
   const [tipo, setTipo] = useState("");
   const [resultado, setResultado] = useState("");
@@ -302,10 +362,22 @@ function ListaVisitas({ visitas }: { visitas: Visita[] }) {
               {filtradas.map((visita) => (
                 <tr
                   key={visita.recordId}
-                  className="transition-colors duration-200 hover:bg-slate-50 dark:hover:bg-white/5"
+                  onClick={() => onAbrir(visita)}
+                  className="cursor-pointer transition-colors duration-200 hover:bg-slate-50 dark:hover:bg-white/5"
                 >
                   <td className="px-5 py-3 font-mono text-xs text-slate-600 dark:text-slate-400">
-                    {visita.id}
+                    {/* La fila entera es clicable por comodidad, pero el foco
+                        del teclado necesita un control real. */}
+                    <button
+                      type="button"
+                      className="cursor-pointer rounded underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none"
+                    >
+                      {visita.id}
+                      <span className="sr-only">
+                        {" "}
+                        · ver detalle de la visita
+                      </span>
+                    </button>
                   </td>
                   <td className="px-5 py-3 whitespace-nowrap tabular-nums">
                     {formatearFecha(visita.fecha)}
