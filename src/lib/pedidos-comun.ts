@@ -71,3 +71,108 @@ export function leerCantidad(valor: unknown): number | "invalido" {
 
   return numero;
 }
+
+/* -------------------------- Filtros del panel ---------------------------- */
+
+/** Lo mínimo de un pedido que hace falta para decidir si pasa los filtros. */
+export type PedidoFiltrable = {
+  id: string;
+  cliente: string;
+  estado: string | null;
+  /** YYYY-MM-DD, o null si el registro no la trae. */
+  fecha: string | null;
+  notas: string | null;
+  responsable: string | null;
+  lineas: { producto: string }[];
+  remisiones: unknown[];
+};
+
+export type FiltrosPedido = {
+  /** Texto libre; se busca en cliente, código, notas, responsable y productos. */
+  termino: string;
+  /**
+   * Un estado concreto, o uno de los agregados: "abiertos", "cerrados",
+   * "sin-despachar", "todos".
+   */
+  estado: string;
+  cliente: string;
+  producto: string;
+  responsable: string;
+  /** Rango inclusivo por fecha del pedido; "" desactiva ese extremo. */
+  desde: string;
+  hasta: string;
+};
+
+export const FILTROS_PEDIDO_VACIOS: FiltrosPedido = {
+  termino: "",
+  estado: "abiertos",
+  cliente: "",
+  producto: "",
+  responsable: "",
+  desde: "",
+  hasta: "",
+};
+
+/**
+ * Si un pedido pasa los filtros del panel.
+ *
+ * Vive aquí y no dentro del componente porque es la parte del panel que se
+ * puede equivocar en silencio: un pedido sin fecha, un rango invertido o un
+ * producto que solo está en un renglón de varios no se ven en la pantalla,
+ * se ven en una prueba.
+ */
+export function coincidePedido(
+  pedido: PedidoFiltrable,
+  filtros: FiltrosPedido,
+): boolean {
+  const termino = filtros.termino.trim().toLowerCase();
+  if (termino) {
+    const texto = [
+      pedido.cliente,
+      pedido.id,
+      pedido.notas ?? "",
+      pedido.responsable ?? "",
+      ...pedido.lineas.map((linea) => linea.producto),
+    ]
+      .join(" ")
+      .toLowerCase();
+    if (!texto.includes(termino)) return false;
+  }
+
+  const cerrado = estaCerradoPedido(pedido.estado);
+  if (filtros.estado === "abiertos" && cerrado) return false;
+  if (filtros.estado === "cerrados" && !cerrado) return false;
+  if (filtros.estado === "sin-despachar") {
+    if (cerrado || pedido.remisiones.length > 0) return false;
+  }
+  if (
+    ESTADOS_PEDIDO.includes(filtros.estado as EstadoPedido) &&
+    pedido.estado !== filtros.estado
+  ) {
+    return false;
+  }
+
+  if (filtros.cliente && pedido.cliente !== filtros.cliente) return false;
+
+  if (
+    filtros.producto &&
+    !pedido.lineas.some((linea) => linea.producto === filtros.producto)
+  ) {
+    return false;
+  }
+
+  if (filtros.responsable && pedido.responsable !== filtros.responsable) {
+    return false;
+  }
+
+  // Un pedido sin fecha no puede afirmarse dentro del rango, así que sale en
+  // cuanto se pide uno. Sin rango sigue apareciendo.
+  if (filtros.desde && (!pedido.fecha || pedido.fecha < filtros.desde)) {
+    return false;
+  }
+  if (filtros.hasta && (!pedido.fecha || pedido.fecha > filtros.hasta)) {
+    return false;
+  }
+
+  return true;
+}

@@ -7,12 +7,14 @@ import type { Cliente } from "@/lib/clientes";
 import { formatearFecha } from "@/lib/fechas";
 import type { LineaPedido, Pedido } from "@/lib/pedidos";
 import {
+  coincidePedido,
   ESTADOS_PEDIDO,
   estaCerradoPedido,
+  FILTROS_PEDIDO_VACIOS,
   formatearCantidad,
   formatearPesos,
   siguientesEstados,
-  type EstadoPedido,
+  type FiltrosPedido,
 } from "@/lib/pedidos-comun";
 import { motivoSinAcceso, puedeEditar, type Permisos } from "@/lib/permisos";
 import type { Producto } from "@/lib/productos";
@@ -68,15 +70,34 @@ export function ModuloPedidos({
   permisos,
 }: Props) {
   const [formularioAbierto, setFormularioAbierto] = useState(false);
-  const [busqueda, setBusqueda] = useState("");
-  const [estado, setEstado] = useState("abiertos");
-  const [cliente, setCliente] = useState("");
+  const [filtros, setFiltros] = useState<FiltrosPedido>(FILTROS_PEDIDO_VACIOS);
   const [abierto, setAbierto] = useState<string | null>(null);
 
-  const nombresCliente = useMemo(() => {
-    const valores = new Set<string>();
-    for (const pedido of pedidos) valores.add(pedido.cliente);
-    return [...valores].sort((a, b) => a.localeCompare(b, "es"));
+  function filtrar(cambios: Partial<FiltrosPedido>) {
+    setFiltros((previos) => ({ ...previos, ...cambios }));
+  }
+
+  /** Las opciones salen de los pedidos visibles, no de los catálogos: filtrar
+   *  por algo que no está en la tabla solo produce listas vacías. */
+  const opciones = useMemo(() => {
+    const clientes = new Set<string>();
+    const productos = new Set<string>();
+    const responsables = new Set<string>();
+
+    for (const pedido of pedidos) {
+      clientes.add(pedido.cliente);
+      if (pedido.responsable) responsables.add(pedido.responsable);
+      for (const linea of pedido.lineas) productos.add(linea.producto);
+    }
+
+    const ordenar = (valores: Set<string>) =>
+      [...valores].sort((a, b) => a.localeCompare(b, "es"));
+
+    return {
+      clientes: ordenar(clientes),
+      productos: ordenar(productos),
+      responsables: ordenar(responsables),
+    };
   }, [pedidos]);
 
   const resumen = useMemo(() => {
@@ -94,37 +115,10 @@ export function ModuloPedidos({
     };
   }, [pedidos]);
 
-  const filtrados = useMemo(() => {
-    const termino = busqueda.trim().toLowerCase();
-
-    return pedidos.filter((pedido) => {
-      const texto = `${pedido.cliente} ${pedido.id} ${pedido.notas ?? ""} ${
-        pedido.responsable ?? ""
-      } ${pedido.lineas.map((l) => l.producto).join(" ")}`.toLowerCase();
-
-      if (termino && !texto.includes(termino)) return false;
-      if (estado === "abiertos" && estaCerradoPedido(pedido.estado)) {
-        return false;
-      }
-      if (estado === "cerrados" && !estaCerradoPedido(pedido.estado)) {
-        return false;
-      }
-      if (estado === "sin-despachar") {
-        if (estaCerradoPedido(pedido.estado) || pedido.remisiones.length > 0) {
-          return false;
-        }
-      }
-      if (
-        ESTADOS_PEDIDO.includes(estado as EstadoPedido) &&
-        pedido.estado !== estado
-      ) {
-        return false;
-      }
-      if (cliente && pedido.cliente !== cliente) return false;
-
-      return true;
-    });
-  }, [pedidos, busqueda, estado, cliente]);
+  const filtrados = useMemo(
+    () => pedidos.filter((pedido) => coincidePedido(pedido, filtros)),
+    [pedidos, filtros],
+  );
 
   return (
     <div className="mx-auto flex max-w-[100rem] flex-col gap-6">
@@ -178,8 +172,8 @@ export function ModuloPedidos({
             <input
               id="buscar-pedido"
               type="search"
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
+              value={filtros.termino}
+              onChange={(e) => filtrar({ termino: e.target.value })}
               placeholder="Buscar por cliente, código, producto o responsable…"
               className={`${input} pl-9`}
             />
@@ -193,8 +187,8 @@ export function ModuloPedidos({
             </label>
             <select
               id="filtro-estado-pedido"
-              value={estado}
-              onChange={(e) => setEstado(e.target.value)}
+              value={filtros.estado}
+              onChange={(e) => filtrar({ estado: e.target.value })}
               className={`${input} w-auto cursor-pointer`}
             >
               <option value="abiertos">Abiertos</option>
@@ -213,17 +207,79 @@ export function ModuloPedidos({
             </label>
             <select
               id="filtro-cliente-pedido"
-              value={cliente}
-              onChange={(e) => setCliente(e.target.value)}
-              className={`${input} w-auto cursor-pointer`}
+              value={filtros.cliente}
+              onChange={(e) => filtrar({ cliente: e.target.value })}
+              className={`${input} w-auto max-w-48 cursor-pointer`}
             >
               <option value="">Todo cliente</option>
-              {nombresCliente.map((valor) => (
+              {opciones.clientes.map((valor) => (
                 <option key={valor} value={valor}>
                   {valor}
                 </option>
               ))}
             </select>
+
+            <label htmlFor="filtro-producto-pedido" className="sr-only">
+              Producto
+            </label>
+            <select
+              id="filtro-producto-pedido"
+              value={filtros.producto}
+              onChange={(e) => filtrar({ producto: e.target.value })}
+              className={`${input} w-auto max-w-48 cursor-pointer`}
+            >
+              <option value="">Todo producto</option>
+              {opciones.productos.map((valor) => (
+                <option key={valor} value={valor}>
+                  {valor}
+                </option>
+              ))}
+            </select>
+
+            <label htmlFor="filtro-responsable-pedido" className="sr-only">
+              Responsable
+            </label>
+            <select
+              id="filtro-responsable-pedido"
+              value={filtros.responsable}
+              onChange={(e) => filtrar({ responsable: e.target.value })}
+              className={`${input} w-auto max-w-48 cursor-pointer`}
+            >
+              <option value="">Todo responsable</option>
+              {opciones.responsables.map((valor) => (
+                <option key={valor} value={valor}>
+                  {valor}
+                </option>
+              ))}
+            </select>
+
+            <div className="flex items-center gap-1.5">
+              <label htmlFor="filtro-desde-pedido" className="sr-only">
+                Pedidos desde
+              </label>
+              <input
+                id="filtro-desde-pedido"
+                type="date"
+                value={filtros.desde}
+                max={filtros.hasta || undefined}
+                onChange={(e) => filtrar({ desde: e.target.value })}
+                className={`${input} w-auto cursor-pointer`}
+              />
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                a
+              </span>
+              <label htmlFor="filtro-hasta-pedido" className="sr-only">
+                Pedidos hasta
+              </label>
+              <input
+                id="filtro-hasta-pedido"
+                type="date"
+                value={filtros.hasta}
+                min={filtros.desde || undefined}
+                onChange={(e) => filtrar({ hasta: e.target.value })}
+                className={`${input} w-auto cursor-pointer`}
+              />
+            </div>
           </div>
         </div>
 
