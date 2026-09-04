@@ -14,6 +14,13 @@ import {
   TIPOS_CASO_ANTERIORES,
   TIPOS_PQRSF,
 } from "@/lib/casos-comun";
+import {
+  ESTADOS_COTIZACION,
+  ESTADOS_INICIALES_COTIZACION,
+  estaCerradaCotizacion,
+  FORMAS_PAGO,
+  MODALIDADES_ENTREGA,
+} from "@/lib/cotizaciones-comun";
 import { RESULTADOS_VISITA, TIPOS_VISITA } from "@/lib/crm-comun";
 import {
   CATEGORIAS_APLICACION,
@@ -39,6 +46,23 @@ describe("las opciones del conector MCP", () => {
   it("replican las de Pedidos", () => {
     expect(mcp.ESTADOS_PEDIDO).toEqual([...ESTADOS_PEDIDO]);
     expect(mcp.CATEGORIAS_APLICACION).toEqual([...CATEGORIAS_APLICACION]);
+  });
+
+  it("replican las de Cotizaciones", () => {
+    expect(mcp.ESTADOS_COTIZACION).toEqual([...ESTADOS_COTIZACION]);
+    expect(mcp.ESTADOS_COTIZACION_INICIALES).toEqual([
+      ...ESTADOS_INICIALES_COTIZACION,
+    ]);
+    expect(mcp.MODALIDADES_ENTREGA).toEqual([...MODALIDADES_ENTREGA]);
+    expect(mcp.FORMAS_PAGO).toEqual([...FORMAS_PAGO]);
+  });
+
+  it("coinciden con qué estado de cotización está cerrado", () => {
+    for (const estado of ESTADOS_COTIZACION) {
+      expect(mcp.ESTADOS_COTIZACION_CERRADOS.includes(estado)).toBe(
+        estaCerradaCotizacion(estado),
+      );
+    }
   });
 
   it("coinciden con qué estado de pedido está cerrado", () => {

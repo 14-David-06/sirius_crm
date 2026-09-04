@@ -22,16 +22,20 @@ type Formulario = {
   emailNotificacion: string;
 };
 
-const VACIO: Formulario = {
-  nombre: "",
-  cliente: "",
-  cargo: "",
-  funciones: [],
-  cedula: "",
-  telefono: "",
-  email: "",
-  emailNotificacion: "",
-};
+function vacio(clienteFijo?: ClienteSelector): Formulario {
+  return {
+    nombre: "",
+    // Desde la ficha de un cliente el vínculo ya está decidido por dónde se
+    // abrió el formulario, así que nace puesto y no se elige.
+    cliente: clienteFijo?.recordId ?? "",
+    cargo: "",
+    funciones: [],
+    cedula: "",
+    telefono: "",
+    email: "",
+    emailNotificacion: "",
+  };
+}
 
 /** Precarga el formulario con lo que ya tiene el contacto que se va a editar. */
 function desdeContacto(contacto: FilaContacto): Formulario {
@@ -52,6 +56,7 @@ export function FormularioContacto({
   clientes,
   cargos,
   contacto,
+  clienteFijo,
   onCerrar,
 }: {
   clientes: ClienteSelector[];
@@ -59,6 +64,12 @@ export function FormularioContacto({
   cargos: string[];
   /** Presente al editar; ausente al crear uno nuevo. */
   contacto?: FilaContacto;
+  /**
+   * El cliente al que pertenece el contacto nuevo, cuando ya está decidido —
+   * se abrió desde su ficha. Entonces no se elige: se muestra, igual que al
+   * editar.
+   */
+  clienteFijo?: ClienteSelector;
   onCerrar: () => void;
 }) {
   const router = useRouter();
@@ -66,10 +77,18 @@ export function FormularioContacto({
   const editando = Boolean(contacto);
 
   const [datos, setDatos] = useState<Formulario>(
-    contacto ? desdeContacto(contacto) : VACIO,
+    contacto ? desdeContacto(contacto) : vacio(clienteFijo),
   );
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /**
+   * El nombre del cliente cuando no se puede elegir, o null cuando sí. Al
+   * editar son los vínculos que ya tiene; al crear desde una ficha, esa.
+   */
+  const nombreFijo = editando
+    ? contacto?.clientes.map((c) => c.nombre).join(", ") || "Sin cliente"
+    : (clienteFijo?.nombre ?? null);
 
   function actualizar(cambios: Partial<Formulario>) {
     setDatos((previos) => ({ ...previos, ...cambios }));
@@ -194,13 +213,12 @@ export function FormularioContacto({
               </label>
               {/* Mover a alguien de empresa no es corregir un dato, así que
                   al editar el cliente queda fijo. */}
-              {editando ? (
+              {nombreFijo !== null ? (
                 <p
                   id="contacto-cliente"
                   className={`${input} mt-1 bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-400`}
                 >
-                  {contacto?.clientes.map((c) => c.nombre).join(", ") ||
-                    "Sin cliente"}
+                  {nombreFijo}
                 </p>
               ) : (
                 <select

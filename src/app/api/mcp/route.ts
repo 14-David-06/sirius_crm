@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 export { preflight as OPTIONS };
 
 /**
- * El conector MCP remoto: las mismas 16 herramientas del servidor stdio, pero
+ * El conector MCP remoto: las mismas 19 herramientas del servidor stdio, pero
  * servidas por HTTP para que el equipo lo agregue en claude.ai y funcione desde
  * el celular sin instalar nada.
  *

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { CANAL_OTRO, CANALES_CONOCIMIENTO } from "@/lib/clientes-comun";
-import { IconClose } from "../../icons";
+import { IconClose } from "../icons";
 
 const input =
   "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors duration-200 placeholder:text-slate-500 focus:border-blue-600 disabled:opacity-60 dark:border-white/10 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:border-blue-400";
@@ -34,6 +34,24 @@ type Formulario = Omit<DatosCliente, "recordId" | "distanciaBodegaKm"> & {
   distanciaBodegaKm: string;
 };
 
+const VACIO: Formulario = {
+  nombre: "",
+  nit: "",
+  direccion: "",
+  ciudad: "",
+  departamento: "",
+  coordenadas: "",
+  distanciaBodegaKm: "",
+  sector: "",
+  segmento: "",
+  etapa: "",
+  responsableComercial: "",
+  vinculacion: "",
+  observaciones: "",
+  comoConocio: "",
+  comoConocioDetalle: "",
+};
+
 function desdeCliente(cliente: DatosCliente): Formulario {
   return {
     nombre: cliente.nombre,
@@ -60,13 +78,17 @@ export function FormularioCliente({
   cliente,
   onCerrar,
 }: {
-  cliente: DatosCliente;
+  /** Presente al corregir la ficha; ausente al registrar uno nuevo. */
+  cliente?: DatosCliente;
   onCerrar: () => void;
 }) {
   const router = useRouter();
   const dialogoRef = useRef<HTMLDivElement>(null);
+  const editando = Boolean(cliente);
 
-  const [datos, setDatos] = useState<Formulario>(desdeCliente(cliente));
+  const [datos, setDatos] = useState<Formulario>(
+    cliente ? desdeCliente(cliente) : VACIO,
+  );
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -105,16 +127,23 @@ export function FormularioCliente({
     setGuardando(true);
     setError(null);
 
-    const respuesta = await fetch(`/api/clientes/${cliente.recordId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        accion: "datos",
-        ...datos,
-        // Con cualquier otro canal el detalle no se guarda.
-        comoConocioDetalle: esOtro ? datos.comoConocioDetalle : "",
-      }),
-    });
+    // Con cualquier otro canal el detalle no se guarda.
+    const cuerpo = {
+      ...datos,
+      comoConocioDetalle: esOtro ? datos.comoConocioDetalle : "",
+    };
+
+    const respuesta = cliente
+      ? await fetch(`/api/clientes/${cliente.recordId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accion: "datos", ...cuerpo }),
+        })
+      : await fetch("/api/clientes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(cuerpo),
+        });
 
     setGuardando(false);
 
@@ -143,7 +172,7 @@ export function FormularioCliente({
               id="titulo-cliente"
               className="text-base font-semibold tracking-tight"
             >
-              Editar cliente
+              {editando ? "Editar cliente" : "Registrar cliente"}
             </h2>
             <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
               Se guarda en la base Sirius Clients Core · tabla Clientes

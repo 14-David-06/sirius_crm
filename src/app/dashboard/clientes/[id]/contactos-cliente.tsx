@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { IconMail, IconPhone } from "../../icons";
+import { IconMail, IconPhone, IconPlus } from "../../icons";
 import { FormularioContacto } from "../../contactos/formulario-contacto";
 import type { ClienteSelector, FilaContacto } from "../../contactos/modulo";
 
@@ -28,9 +28,23 @@ export function ContactosCliente({
   puedeEditar: boolean;
 }) {
   const [enEdicion, setEnEdicion] = useState<FilaContacto | null>(null);
+  const [creando, setCreando] = useState(false);
 
   return (
     <>
+      {puedeEditar ? (
+        <div className="mt-3 flex justify-end">
+          <button
+            type="button"
+            onClick={() => setCreando(true)}
+            className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-blue-800 transition-colors duration-200 hover:bg-blue-50 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none dark:border-white/10 dark:bg-transparent dark:text-blue-300 dark:hover:bg-blue-500/15"
+          >
+            <IconPlus className="h-3.5 w-3.5" />
+            Agregar contacto
+          </button>
+        </div>
+      ) : null}
+
       {contactos.length === 0 ? (
         <p className="mt-4 rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-600 dark:border-white/15 dark:text-slate-400">
           Este cliente no tiene personal registrado en Sirius Clients Core.
@@ -55,6 +69,15 @@ export function ContactosCliente({
           cargos={cargos}
           contacto={enEdicion}
           onCerrar={() => setEnEdicion(null)}
+        />
+      ) : null}
+
+      {creando ? (
+        <FormularioContacto
+          clientes={[cliente]}
+          clienteFijo={cliente}
+          cargos={cargos}
+          onCerrar={() => setCreando(false)}
         />
       ) : null}
     </>

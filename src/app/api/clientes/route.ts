@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
 
-import { listarClientes, listarClientesCompletos } from "@/lib/clientes";
+import { ETIQUETAS, invalidar } from "@/lib/cache";
+import {
+  crearCliente,
+  esErrorDatosCliente,
+  leerDatosCliente,
+  listarClientes,
+  listarClientesCompletos,
+  nombreClienteRepetido,
+} from "@/lib/clientes";
 import { permisosDe } from "@/lib/permisos";
 import { getSession } from "@/lib/session";
 
@@ -50,6 +58,62 @@ export async function GET() {
     console.error("listar clientes", error);
     return NextResponse.json(
       { error: "No pudimos leer los clientes." },
+      { status: 502 },
+    );
+  }
+}
+
+/**
+ * Registra un cliente nuevo en el maestro.
+ *
+ * El serial `CL-XXXX` lo genera Airtable, así que no se pide ni se acepta: es
+ * lo que después referencian visitas, casos, pedidos y cotizaciones, y un
+ * serial escrito a mano se puede repetir.
+ */
+export async function POST(request: Request) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+  }
+
+  // El maestro es dato compartido: lo administra quien gestiona el catálogo,
+  // igual que contactos y productos.
+  if (!permisosDe(session).gestionarCatalogo) {
+    return NextResponse.json(
+      { error: "Tu nivel de acceso no permite registrar clientes." },
+      { status: 403 },
+    );
+  }
+
+  const body = (await request.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
+
+  const datos = leerDatosCliente(body);
+  if (esErrorDatosCliente(datos)) {
+    return NextResponse.json({ error: datos.error }, { status: datos.status });
+  }
+
+  try {
+    const repetido = await nombreClienteRepetido(datos.nombre);
+    if (repetido) {
+      return NextResponse.json(
+        {
+          error: `Ya existe un cliente llamado «${datos.nombre}» (${repetido}).`,
+        },
+        { status: 409 },
+      );
+    }
+
+    const cliente = await crearCliente(datos, session.idEmpleado);
+
+    invalidar(ETIQUETAS.clientes);
+    return NextResponse.json({ cliente }, { status: 201 });
+  } catch (error) {
+    console.error("crear cliente", error);
+    return NextResponse.json(
+      { error: "No pudimos guardar el cliente en Airtable." },
       { status: 502 },
     );
   }

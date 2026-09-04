@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { formatearFecha } from "@/lib/fechas";
-import { IconFilter, IconSearch } from "../icons";
+import { FormularioCliente } from "./formulario-cliente";
+import { IconFilter, IconPlus, IconSearch } from "../icons";
 
 const card =
   "tarjeta3d rounded-xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900";
@@ -25,10 +26,17 @@ export type FilaCliente = {
   seguimientoAtrasado: boolean;
 };
 
-export function ListaClientes({ filas }: { filas: FilaCliente[] }) {
+export function ListaClientes({
+  filas,
+  puedeCrear,
+}: {
+  filas: FilaCliente[];
+  puedeCrear: boolean;
+}) {
   const [busqueda, setBusqueda] = useState("");
   const [estado, setEstado] = useState("activos");
   const [departamento, setDepartamento] = useState("");
+  const [creando, setCreando] = useState(false);
 
   const departamentos = useMemo(() => {
     const valores = new Set<string>();
@@ -76,7 +84,22 @@ export function ListaClientes({ filas }: { filas: FilaCliente[] }) {
             {resumen.atrasados} con seguimiento atrasado
           </p>
         </div>
+
+        {puedeCrear ? (
+          <button
+            type="button"
+            onClick={() => setCreando(true)}
+            className="flex cursor-pointer items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-medium text-white transition-colors duration-200 hover:bg-blue-800 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none dark:bg-blue-600 dark:hover:bg-blue-500"
+          >
+            <IconPlus className="h-4 w-4" />
+            Registrar cliente
+          </button>
+        ) : null}
       </div>
+
+      {creando ? (
+        <FormularioCliente onCerrar={() => setCreando(false)} />
+      ) : null}
 
       <section className={`${card} p-5`}>
         <div className="flex flex-wrap items-center gap-3">

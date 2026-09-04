@@ -2,7 +2,7 @@
  * El servidor MCP del CRM, sin transporte.
  *
  * Aquí vive lo que comparten las dos formas de conectarse —el proceso stdio
- * local (`mcp/servidor.mjs`) y el endpoint remoto (`/api/mcp`)—: las mismas 16
+ * local (`mcp/servidor.mjs`) y el endpoint remoto (`/api/mcp`)—: las mismas 19
  * herramientas y las mismas instrucciones. Cambiar de transporte no debería
  * cambiar lo que Claude puede hacer, así que solo hay una definición de eso.
  *

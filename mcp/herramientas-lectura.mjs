@@ -13,6 +13,7 @@ import {
   resolverCliente,
   respuesta,
 } from "./comun.mjs";
+import { ESTADOS_COTIZACION_CERRADOS } from "./opciones.mjs";
 
 const SOLO_LECTURA = { readOnlyHint: true, openWorldHint: false };
 
@@ -76,6 +77,44 @@ export function resumirPedido(pedido) {
       limpiar({
         producto: linea.idProductoCore,
         cantidad: linea.cantidad,
+        precioUnitario: linea.precioUnitario,
+        subtotal: linea.subtotal,
+      }),
+    ),
+  });
+}
+
+export function resumirCotizacion(cotizacion) {
+  return limpiar({
+    id: cotizacion.id,
+    recordId: cotizacion.recordId,
+    revision: cotizacion.revision,
+    titulo: cotizacion.titulo,
+    cliente: cotizacion.cliente,
+    idClienteCore: cotizacion.idClienteCore,
+    contacto: cotizacion.contacto,
+    estado: cotizacion.estado,
+    responsable: cotizacion.responsable,
+    fechaEmision: cotizacion.fechaEmision,
+    vigenciaDias: cotizacion.vigenciaDias,
+    fechaEnvio: cotizacion.fechaEnvio,
+    fechaCierre: cotizacion.fechaCierre,
+    motivoCierre: cotizacion.motivoCierre,
+    subtotal: cotizacion.subtotal,
+    // Null cuando el IVA esta por confirmar, que no es lo mismo que 0 %.
+    ivaPorcentaje: cotizacion.ivaPorcentaje,
+    iva: cotizacion.iva,
+    total: cotizacion.total,
+    modalidadEntrega: cotizacion.modalidadEntrega,
+    puntoEntrega: cotizacion.puntoEntrega,
+    formaPago: cotizacion.formaPago,
+    observaciones: cotizacion.observaciones,
+    lineas: (cotizacion.lineas ?? []).map((linea) =>
+      limpiar({
+        producto: linea.producto ?? linea.idProductoCore,
+        codigo: linea.idProductoCore,
+        cantidad: linea.cantidad,
+        unidad: linea.unidad,
         precioUnitario: linea.precioUnitario,
         subtotal: linea.subtotal,
       }),
@@ -553,4 +592,86 @@ export function registrarLectura(servidor, api) {
       });
     },
   );
+
+  servidor.registerTool(
+    "crm_listar_cotizaciones",
+    {
+      title: "Cotizaciones",
+      description:
+        "Las ofertas comerciales emitidas, con sus renglones y su total en pesos " +
+        "colombianos. El consecutivo COT-YYYY-NNN identifica el documento; " +
+        "`vencida` dice si ya se paso de su vigencia, que es distinto de estar cerrada.",
+      inputSchema: {
+        cliente: z.string().optional(),
+        estado: z.string().optional(),
+        soloVencidas: z
+          .boolean()
+          .optional()
+          .describe(
+            "Solo las que pasaron su vigencia y nadie cerro: las que hay que perseguir.",
+          ),
+        desde: z.string().optional().describe("YYYY-MM-DD, inclusive."),
+        hasta: z.string().optional().describe("YYYY-MM-DD, inclusive."),
+        limite: z.number().int().min(1).max(200).optional(),
+      },
+      annotations: SOLO_LECTURA,
+    },
+    async ({
+      cliente: referencia,
+      estado,
+      soloVencidas = false,
+      desde,
+      hasta,
+      limite = 30,
+    }) => {
+      const { cotizaciones } = await obtener("/api/cotizaciones");
+      const cliente = referencia ? await resolverCliente(api, referencia) : null;
+      const dia = hoy();
+
+      const filtradas = cotizaciones.filter((cotizacion) => {
+        if (cliente && cotizacion.idClienteCore !== cliente.id) return false;
+        if (estado && !contiene(cotizacion.estado, estado)) return false;
+        if (!enRango(cotizacion.fechaEmision, desde, hasta)) return false;
+        if (soloVencidas) {
+          if (ESTADOS_COTIZACION_CERRADOS.includes(cotizacion.estado)) {
+            return false;
+          }
+          if (!vencida(cotizacion, dia)) return false;
+        }
+        return true;
+      });
+
+      return respuesta({
+        total: filtradas.length,
+        mostradas: Math.min(filtradas.length, limite),
+        valorTotal: filtradas.reduce(
+          (suma, cotizacion) => suma + (cotizacion.total ?? 0),
+          0,
+        ),
+        cotizaciones: filtradas.slice(0, limite).map((cotizacion) => ({
+          ...resumirCotizacion(cotizacion),
+          vencida: vencida(cotizacion, dia),
+        })),
+      });
+    },
+  );
+}
+
+/**
+ * Si la oferta ya se paso de su vigencia. El dia del vencimiento todavia
+ * cuenta como vigente, igual que en el CRM; sin fecha o sin vigencia no se
+ * afirma nada, porque una oferta a la que le falta el dato no esta vencida,
+ * esta incompleta.
+ */
+function vencida(cotizacion, dia) {
+  if (!cotizacion.fechaEmision || cotizacion.vigenciaDias === null) {
+    return false;
+  }
+
+  const [anio, mes, d] = cotizacion.fechaEmision.slice(0, 10).split("-").map(Number);
+  if (!anio || !mes || !d) return false;
+
+  const fecha = new Date(Date.UTC(anio, mes - 1, d));
+  fecha.setUTCDate(fecha.getUTCDate() + cotizacion.vigenciaDias);
+  return dia > fecha.toISOString().slice(0, 10);
 }

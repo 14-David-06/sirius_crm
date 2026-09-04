@@ -25,12 +25,17 @@ import {
 } from "./comun.mjs";
 import {
   resumirCaso,
+  resumirCotizacion,
   resumirPedido,
   resumirVisita,
 } from "./herramientas-lectura.mjs";
 import {
   CATEGORIAS_APLICACION,
   ESTADOS_CASO,
+  ESTADOS_COTIZACION,
+  ESTADOS_COTIZACION_INICIALES,
+  FORMAS_PAGO,
+  MODALIDADES_ENTREGA,
   ESTADOS_PEDIDO,
   ESTADOS_PEDIDO_ABIERTOS,
   RESULTADOS_VISITA,
@@ -93,6 +98,18 @@ async function pedidoActual(api, referencia) {
     );
   }
   return pedido;
+}
+
+/** Trae la cotizacion que se va a mover de estado. */
+async function cotizacionActual(api, referencia) {
+  const { cotizaciones } = await api.obtener("/api/cotizaciones");
+  const cotizacion = porId(cotizaciones, referencia);
+  if (!cotizacion) {
+    throw new Error(
+      `No encuentro la cotizacion «${referencia}» entre las que puedes ver. Usa crm_listar_cotizaciones.`,
+    );
+  }
+  return cotizacion;
 }
 
 export function registrarEscritura(servidor, api) {
@@ -509,6 +526,171 @@ export function registrarEscritura(servidor, api) {
       return respuesta({
         anterior: actual.estado,
         actualizado: resumirPedido(pedido),
+      });
+    },
+  );
+
+  servidor.registerTool(
+    "crm_crear_cotizacion",
+    {
+      title: "Emitir una cotizacion",
+      description:
+        "Emite una oferta comercial con sus renglones y devuelve el consecutivo " +
+        "COT-YYYY-NNN que le asigno el sistema. Si un renglon no trae precio se usa " +
+        "el de lista; manda 0 explicitamente para una muestra sin costo. Dejar el IVA " +
+        "sin definir NO es cero: el documento lo imprime como «por confirmar», que es " +
+        "lo correcto cuando facturacion todavia no lo ha dicho. Una cotizacion nueva " +
+        "solo puede nacer en Borrador o Enviada.",
+      inputSchema: {
+        cliente: z.string().describe("Serial CL-000X, record id o nombre."),
+        titulo: z
+          .string()
+          .describe("De que es la oferta, ej. «Microbiologia agricola»."),
+        lineas: z
+          .array(
+            z.object({
+              producto: z
+                .string()
+                .describe("Codigo SIRIUS-PRODUCT-XXXX, abreviatura o nombre."),
+              cantidad: z.number().positive(),
+              precioUnitario: z
+                .number()
+                .min(0)
+                .optional()
+                .describe("Sin el se toma el precio de lista vigente."),
+              descripcion: z
+                .string()
+                .optional()
+                .describe(
+                  "Que hace el producto, para la seccion «El producto». Por defecto, las observaciones del catalogo.",
+                ),
+            }),
+          )
+          .min(1)
+          .max(50),
+        contacto: z
+          .string()
+          .optional()
+          .describe(
+            "Codigo Persona Cliente del destinatario. Debe pertenecer al mismo cliente.",
+          ),
+        fechaEmision: FECHA.optional().describe("Por defecto, hoy en Bogota."),
+        vigenciaDias: z.number().int().min(1).max(365).optional(),
+        estado: z.enum(ESTADOS_COTIZACION_INICIALES).optional(),
+        ivaPorcentaje: z
+          .number()
+          .min(0)
+          .max(100)
+          .optional()
+          .describe("Sin el, queda por confirmar con facturacion."),
+        introduccion: z.string().optional(),
+        modalidadEntrega: z.enum(MODALIDADES_ENTREGA).optional(),
+        puntoEntrega: z.string().optional(),
+        valorFlete: z.number().min(0).optional(),
+        fechaDespacho: FECHA.optional(),
+        fechaEntrega: FECHA.optional(),
+        quienRecibe: z.string().optional(),
+        horarioRecibo: z.string().optional(),
+        formaPago: z.enum(FORMAS_PAGO).optional(),
+        ordenCompra: z.string().optional(),
+        emailFacturacion: z.string().optional(),
+        registroIca: z.string().optional(),
+        observaciones: z
+          .string()
+          .optional()
+          .describe("Se imprime en el documento: lo lee el cliente."),
+        presentacion: z.string().optional(),
+        unidades: z.string().optional(),
+        almacenamiento: z.string().optional(),
+        vidaUtilDias: z.number().positive().optional(),
+        notasInternas: z
+          .string()
+          .optional()
+          .describe("NO se imprime en el documento."),
+        responsable: z
+          .string()
+          .optional()
+          .describe("Nombre de quien emite, si no es la propia sesion."),
+      },
+      annotations: ESCRITURA,
+    },
+    async ({
+      cliente: referencia,
+      contacto,
+      lineas,
+      fechaEmision,
+      estado,
+      ...datos
+    }) => {
+      const cliente = await resolverCliente(api, referencia);
+
+      const renglones = [];
+      for (const linea of lineas) {
+        const producto = await resolverProducto(api, linea.producto);
+
+        const precio = linea.precioUnitario ?? producto.precio;
+        if (precio === null || precio === undefined) {
+          throw new Error(
+            `«${producto.nombre}» (${producto.codigo}) no tiene precio de lista: indicalo en el renglon.`,
+          );
+        }
+
+        renglones.push(
+          limpiar({
+            idProductoCore: producto.codigo,
+            cantidad: linea.cantidad,
+            precioUnitario: precio,
+            descripcion: linea.descripcion,
+          }),
+        );
+      }
+
+      const { cotizacion } = await crear(
+        "/api/cotizaciones",
+        limpiar({
+          idClienteCore: cliente.id,
+          idContactoCliente: contacto,
+          fechaEmision: fechaEmision ?? hoy(),
+          estado: estado ?? "Borrador",
+          lineas: renglones,
+          ...datos,
+        }),
+      );
+
+      return respuesta({ creada: resumirCotizacion(cotizacion) });
+    },
+  );
+
+  servidor.registerTool(
+    "crm_cambiar_estado_cotizacion",
+    {
+      title: "Mover una cotizacion de estado",
+      description:
+        "El unico cambio que el CRM hace sobre una cotizacion emitida; el contenido " +
+        "no se reescribe. Los saltos no son libres: un Borrador se envia o se anula, " +
+        "y solo una Enviada puede pasar a Aceptada o Rechazada. Cerrarla como Aceptada " +
+        "o Rechazada exige el motivo: que dijo el cliente.",
+      inputSchema: {
+        cotizacion: z.string().describe("Consecutivo COT-YYYY-NNN o record id."),
+        estado: z.enum(ESTADOS_COTIZACION),
+        motivoCierre: z
+          .string()
+          .optional()
+          .describe("Obligatorio al marcarla Aceptada o Rechazada."),
+      },
+      annotations: ESCRITURA,
+    },
+    async ({ cotizacion: referencia, estado, motivoCierre }) => {
+      const actual = await cotizacionActual(api, referencia);
+
+      const { cotizacion } = await modificar(
+        `/api/cotizaciones/${actual.recordId}`,
+        limpiar({ estado, motivoCierre }),
+      );
+
+      return respuesta({
+        anterior: actual.estado,
+        actualizada: resumirCotizacion(cotizacion),
       });
     },
   );

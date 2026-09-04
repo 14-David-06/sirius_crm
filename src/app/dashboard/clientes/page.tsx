@@ -80,7 +80,8 @@ export default async function ClientesPage() {
 
   return (
     <Shell nombre={session.nombre} rol={session.rol} permisos={permisos}>
-      <ListaClientes filas={filas} />
+      {/* Registrar en el maestro es administrar el catálogo, no leerlo. */}
+      <ListaClientes filas={filas} puedeCrear={permisos.gestionarCatalogo} />
     </Shell>
   );
 }

@@ -180,6 +180,8 @@ const CAMPOS_PERSONAL = {
   estado: "Estado de actividad",
   rol: "Rol (from Rol)",
   nivelAcceso: "Nivel Acceso (from Nivel_Sistema_Nuevo)",
+  telefono: "Teléfono",
+  email: "Correo electrónico",
 } as const;
 
 export type Persona = {
@@ -235,10 +237,19 @@ export type PersonaActiva = {
   rol: string | null;
   /** ID Empleado ("SIRIUS-PER-XXXX"): la clave con la que el CRM marca autoría. */
   idEmpleado: string;
+  /**
+   * Cómo contactar a la persona. No es dato interno: el pie de una cotización
+   * los imprime para que el cliente sepa a quién responderle, así que salen de
+   * Nómina y no se transcriben a mano en cada oferta.
+   */
+  telefono: string | null;
+  email: string | null;
 };
 
+// "-v2" porque `PersonaActiva` ganó teléfono y correo: la clave vieja seguiría
+// devolviendo entradas guardadas sin esos campos.
 const leerPersonal = cachearLectura(
-  "personal-activo",
+  "personal-activo-v2",
   ETIQUETAS.personal,
   async (): Promise<PersonaActiva[]> => {
     const registros = await listarRegistros(env.baseNomina, env.tablaPersonal, {
@@ -247,6 +258,8 @@ const leerPersonal = cachearLectura(
         CAMPOS_PERSONAL.estado,
         CAMPOS_PERSONAL.rol,
         CAMPOS_PERSONAL.idEmpleado,
+        CAMPOS_PERSONAL.telefono,
+        CAMPOS_PERSONAL.email,
       ],
       filterByFormula: `{${CAMPOS_PERSONAL.estado}} = 'Activo'`,
     });
@@ -256,6 +269,8 @@ const leerPersonal = cachearLectura(
         nombre: texto(registro.fields[CAMPOS_PERSONAL.nombre]) ?? "",
         rol: texto(registro.fields[CAMPOS_PERSONAL.rol]),
         idEmpleado: texto(registro.fields[CAMPOS_PERSONAL.idEmpleado]) ?? "",
+        telefono: texto(registro.fields[CAMPOS_PERSONAL.telefono]),
+        email: texto(registro.fields[CAMPOS_PERSONAL.email]),
       }))
       .filter((persona) => persona.nombre && persona.idEmpleado)
       .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));

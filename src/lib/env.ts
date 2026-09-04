@@ -99,6 +99,26 @@ export const env = {
     );
   },
 
+  /* Sirius Cotizaciones Core — ofertas comerciales y sus renglones */
+  get baseCotizaciones() {
+    return required(
+      "AIRTABLE_BASE_COTIZACIONES",
+      process.env.AIRTABLE_BASE_COTIZACIONES,
+    );
+  },
+  get tablaCotizaciones() {
+    return required(
+      "AIRTABLE_TABLE_COTIZACIONES",
+      process.env.AIRTABLE_TABLE_COTIZACIONES,
+    );
+  },
+  get tablaDetallesCotizacion() {
+    return required(
+      "AIRTABLE_TABLE_DETALLES_COTIZACION",
+      process.env.AIRTABLE_TABLE_DETALLES_COTIZACION,
+    );
+  },
+
   /* Sirius Remisiones Core — despacho y entrega de cada pedido */
   get baseRemisiones() {
     return required(

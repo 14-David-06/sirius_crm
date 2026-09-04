@@ -67,3 +67,36 @@ export const CATEGORIAS_APLICACION = [
   "Preventivo Pestalotiopsis",
   "Otro",
 ];
+
+export const ESTADOS_COTIZACION = [
+  "Borrador",
+  "Enviada",
+  "Aceptada",
+  "Rechazada",
+  "Vencida",
+  "Anulada",
+];
+
+/** Una cotizacion en estos estados ya tomo su decision y no se mueve. */
+export const ESTADOS_COTIZACION_CERRADOS = [
+  "Aceptada",
+  "Rechazada",
+  "Vencida",
+  "Anulada",
+];
+
+/** Con los que puede nacer: nadie la ha aceptado todavia. */
+export const ESTADOS_COTIZACION_INICIALES = ["Borrador", "Enviada"];
+
+export const MODALIDADES_ENTREGA = [
+  "Sirius entrega en el punto acordado",
+  "El cliente recoge en planta",
+  "Envio por transportadora",
+];
+
+export const FORMAS_PAGO = [
+  "Anticipado 100 % antes del despacho",
+  "50 % anticipo · 50 % contra entrega",
+  "Credito a 30 dias",
+  "Credito a 45 dias",
+];

@@ -7,6 +7,8 @@ import {
 } from "@/lib/airtable";
 import { cachearLectura, ETIQUETAS } from "@/lib/cache";
 import {
+  CANAL_OTRO,
+  reconocerCanal,
   reconocerFunciones,
   type CanalConocimiento,
   type TipoContacto,
@@ -255,6 +257,29 @@ export type CambiosCliente = {
   comoConocioDetalle: string | null;
 };
 
+/** La ficha traducida a campos de Airtable. La comparten crear y corregir. */
+function camposDe(datos: CambiosCliente): Record<string, unknown> {
+  return {
+    [CAMPOS_CLIENTE.nombre]: datos.nombre,
+    [CAMPOS_CLIENTE.nit]: datos.nit ?? "",
+    [CAMPOS_CLIENTE.direccion]: datos.direccion ?? "",
+    [CAMPOS_CLIENTE.ciudad]: datos.ciudad ?? "",
+    [CAMPOS_CLIENTE.departamento]: datos.departamento ?? "",
+    [CAMPOS_CLIENTE.coordenadas]: datos.coordenadas ?? "",
+    // El número sí va como null: "" no es un número y Airtable lo rechaza.
+    [CAMPOS_CLIENTE.distancia]: datos.distanciaBodegaKm,
+    [CAMPOS_CLIENTE.sector]: datos.sector ?? "",
+    [CAMPOS_CLIENTE.segmento]: datos.segmento ?? "",
+    [CAMPOS_CLIENTE.etapa]: datos.etapa ?? "",
+    [CAMPOS_CLIENTE.responsableComercial]: datos.responsableComercial ?? "",
+    [CAMPOS_CLIENTE.vinculacion]: datos.vinculacion,
+    [CAMPOS_CLIENTE.observaciones]: datos.observaciones ?? "",
+    // Un singleSelect se vacía con null; "" no es una de sus opciones.
+    [CAMPOS_CLIENTE.comoConocio]: datos.comoConocio,
+    [CAMPOS_CLIENTE.comoConocioDetalle]: datos.comoConocioDetalle ?? "",
+  };
+}
+
 export async function actualizarCliente(
   recordId: string,
   datos: CambiosCliente,
@@ -264,28 +289,153 @@ export async function actualizarCliente(
     env.baseClientes,
     env.tablaClientes,
     recordId,
-    {
-      [CAMPOS_CLIENTE.nombre]: datos.nombre,
-      [CAMPOS_CLIENTE.nit]: datos.nit ?? "",
-      [CAMPOS_CLIENTE.direccion]: datos.direccion ?? "",
-      [CAMPOS_CLIENTE.ciudad]: datos.ciudad ?? "",
-      [CAMPOS_CLIENTE.departamento]: datos.departamento ?? "",
-      [CAMPOS_CLIENTE.coordenadas]: datos.coordenadas ?? "",
-      // El número sí va como null: "" no es un número y Airtable lo rechaza.
-      [CAMPOS_CLIENTE.distancia]: datos.distanciaBodegaKm,
-      [CAMPOS_CLIENTE.sector]: datos.sector ?? "",
-      [CAMPOS_CLIENTE.segmento]: datos.segmento ?? "",
-      [CAMPOS_CLIENTE.etapa]: datos.etapa ?? "",
-      [CAMPOS_CLIENTE.responsableComercial]: datos.responsableComercial ?? "",
-      [CAMPOS_CLIENTE.vinculacion]: datos.vinculacion,
-      [CAMPOS_CLIENTE.observaciones]: datos.observaciones ?? "",
-      // Un singleSelect se vacía con null; "" no es una de sus opciones.
-      [CAMPOS_CLIENTE.comoConocio]: datos.comoConocio,
-      [CAMPOS_CLIENTE.comoConocioDetalle]: datos.comoConocioDetalle ?? "",
-      [CAMPOS_CLIENTE.modificadoPor]: autorId,
-    },
+    { ...camposDe(datos), [CAMPOS_CLIENTE.modificadoPor]: autorId },
   );
   return aCliente(registro);
+}
+
+/**
+ * Registra un cliente nuevo.
+ *
+ * El serial (`ID`) no se manda: en Sirius Clients Core es una fórmula sobre un
+ * autoNumber, así que lo genera Airtable. Nace Activo — se registra para
+ * trabajarlo, y un cliente que nace inactivo no tiene para qué existir.
+ */
+export async function crearCliente(
+  datos: CambiosCliente,
+  autorId: string,
+): Promise<Cliente> {
+  const registro = await crearRegistro(env.baseClientes, env.tablaClientes, {
+    ...camposDe(datos),
+    [CAMPOS_CLIENTE.estado]: "Activo",
+    [CAMPOS_CLIENTE.creadoPor]: autorId,
+    [CAMPOS_CLIENTE.modificadoPor]: autorId,
+  });
+  return aCliente(registro);
+}
+
+/* ------------------------- Validación de la ficha ------------------------ */
+
+export type ErrorDatosCliente = { error: string; status: 400 };
+
+export function esErrorDatosCliente(
+  valor: CambiosCliente | ErrorDatosCliente,
+): valor is ErrorDatosCliente {
+  return "error" in valor;
+}
+
+const FECHA = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Lee y valida la ficha que llega del formulario.
+ *
+ * Vive aquí y no en cada ruta porque crear y corregir un cliente tienen que
+ * aceptar exactamente lo mismo: dos copias de estas reglas se separan a la
+ * primera que se ajuste, y entonces un cliente creado puede guardar algo que
+ * al editarlo se rechaza.
+ */
+export function leerDatosCliente(
+  body: Record<string, unknown> | null,
+): CambiosCliente | ErrorDatosCliente {
+  if (!body) return { error: "Cuerpo inválido.", status: 400 };
+
+  const nombre = cadena(body.nombre);
+  if (!nombre) {
+    return { error: "El nombre del cliente es obligatorio.", status: 400 };
+  }
+
+  const canalCrudo = cadena(body.comoConocio);
+  const comoConocio = reconocerCanal(canalCrudo);
+  if (canalCrudo && !comoConocio) {
+    return {
+      error: "El canal por el que nos conoció no es uno de los definidos.",
+      status: 400,
+    };
+  }
+
+  // El detalle solo tiene sentido con "Otro"; con cualquier otro canal se
+  // descarta para que no quede un texto viejo contradiciendo la opción.
+  const detalle = cadena(body.comoConocioDetalle);
+  if (comoConocio === CANAL_OTRO && !detalle) {
+    return { error: "Si el canal es «Otro», escribe cuál fue.", status: 400 };
+  }
+
+  const vinculacion = cadena(body.vinculacion);
+  if (vinculacion && !FECHA.test(vinculacion)) {
+    return { error: "La fecha de vinculación no es válida.", status: 400 };
+  }
+
+  const distancia = leerDistancia(body.distanciaBodegaKm);
+  if (distancia === "invalido") {
+    return {
+      error: "La distancia a bodega debe ser un número de kilómetros.",
+      status: 400,
+    };
+  }
+
+  return {
+    nombre,
+    nit: cadena(body.nit),
+    direccion: cadena(body.direccion),
+    ciudad: cadena(body.ciudad),
+    departamento: cadena(body.departamento),
+    coordenadas: cadena(body.coordenadas),
+    distanciaBodegaKm: distancia,
+    sector: cadena(body.sector),
+    segmento: cadena(body.segmento),
+    etapa: cadena(body.etapa),
+    responsableComercial: cadena(body.responsableComercial),
+    vinculacion,
+    observaciones: cadena(body.observaciones),
+    comoConocio,
+    comoConocioDetalle: comoConocio === CANAL_OTRO ? detalle : null,
+  };
+}
+
+/**
+ * El serial del cliente que ya tiene ese nombre, o null si no hay ninguno.
+ *
+ * Dos clientes con el mismo nombre son indistinguibles en las visitas, que los
+ * guardan por nombre cuando no traen serial. Al crear no se excluye a nadie;
+ * al corregir se excluye el propio registro.
+ */
+export async function nombreClienteRepetido(
+  nombre: string,
+  exceptoRecordId?: string,
+): Promise<string | null> {
+  const clientes = await listarClientesCompletos();
+  const buscado = normalizarNombre(nombre);
+
+  const otro = clientes.find(
+    (cliente) =>
+      cliente.recordId !== exceptoRecordId &&
+      normalizarNombre(cliente.nombre) === buscado,
+  );
+
+  return otro ? otro.id || otro.recordId : null;
+}
+
+function normalizarNombre(valor: string): string {
+  return valor
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** El campo admite quedarse vacío; lo que no admite es un texto que no es número. */
+function leerDistancia(valor: unknown): number | null | "invalido" {
+  if (valor === undefined || valor === null || valor === "") return null;
+
+  const numero = typeof valor === "number" ? valor : Number(String(valor));
+  if (!Number.isFinite(numero) || numero < 0) return "invalido";
+
+  return numero;
+}
+
+function cadena(valor: unknown): string | null {
+  return typeof valor === "string" && valor.trim() ? valor.trim() : null;
 }
 
 /**

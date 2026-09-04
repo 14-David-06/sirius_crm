@@ -3,7 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { FormularioCliente, type DatosCliente } from "./formulario-cliente";
+import {
+  FormularioCliente,
+  type DatosCliente,
+} from "../formulario-cliente";
 
 /**
  * Los botones de la ficha. Viven en un componente cliente porque la página es

@@ -26,6 +26,7 @@ export const ETIQUETAS = {
   personal: "airtable:personal",
   pedidos: "airtable:pedidos",
   remisiones: "airtable:remisiones",
+  cotizaciones: "airtable:cotizaciones",
 } as const;
 
 export type Etiqueta = (typeof ETIQUETAS)[keyof typeof ETIQUETAS];
@@ -49,6 +50,9 @@ const SEGUNDOS = {
   // Un pedido cambia de estado durante el dia; la remision la escribe otra app.
   [ETIQUETAS.pedidos]: 30,
   [ETIQUETAS.remisiones]: 60,
+  // Una cotización se edita mientras se negocia, y quien la imprime necesita
+  // ver lo que acabó de cambiar.
+  [ETIQUETAS.cotizaciones]: 30,
 } as const satisfies Record<Etiqueta, number>;
 
 /**
