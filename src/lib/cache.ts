@@ -28,6 +28,7 @@ export const ETIQUETAS = {
   pedidos: "airtable:pedidos",
   remisiones: "airtable:remisiones",
   cotizaciones: "airtable:cotizaciones",
+  proyectos: "airtable:proyectos",
 } as const;
 
 export type Etiqueta = (typeof ETIQUETAS)[keyof typeof ETIQUETAS];
@@ -56,6 +57,9 @@ const SEGUNDOS = {
   // Una cotización se edita mientras se negocia, y quien la imprime necesita
   // ver lo que acabó de cambiar.
   [ETIQUETAS.cotizaciones]: 30,
+  // Proyectos y sus tareas comparten etiqueta: el avance del proyecto sale de
+  // las tareas, así que tocar una invalida la vista de ambos.
+  [ETIQUETAS.proyectos]: 30,
 } as const satisfies Record<Etiqueta, number>;
 
 /**

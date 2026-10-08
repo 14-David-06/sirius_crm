@@ -31,7 +31,7 @@ export const env = {
     return required("AIRTABLE_TABLE_AREAS", process.env.AIRTABLE_TABLE_AREAS);
   },
 
-  /* Sirius CRM — visitas y casos */
+  /* Sirius CRM — visitas, casos y proyectos */
   get baseCrm() {
     return required("AIRTABLE_BASE_CRM", process.env.AIRTABLE_BASE_CRM);
   },
@@ -43,6 +43,18 @@ export const env = {
   },
   get tablaCasos() {
     return required("AIRTABLE_TABLE_CASOS", process.env.AIRTABLE_TABLE_CASOS);
+  },
+  get tablaProyectos() {
+    return required(
+      "AIRTABLE_TABLE_PROYECTOS",
+      process.env.AIRTABLE_TABLE_PROYECTOS,
+    );
+  },
+  get tablaTareasProyecto() {
+    return required(
+      "AIRTABLE_TABLE_TAREAS_PROYECTO",
+      process.env.AIRTABLE_TABLE_TAREAS_PROYECTO,
+    );
   },
 
   /* Sirius Clients Core — ficha de cliente */

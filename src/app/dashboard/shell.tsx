@@ -56,7 +56,12 @@ const grupos: { titulo: string; items: ItemNav[] }[] = [
         Icono: IconUsers,
         href: "/dashboard/contactos",
       },
-      { id: "oportunidades", etiqueta: "Oportunidades", Icono: IconTrending },
+      {
+        id: "proyectos",
+        etiqueta: "Proyectos",
+        Icono: IconTrending,
+        href: "/dashboard/proyectos",
+      },
       {
         id: "visitas",
         etiqueta: "Visitas",
@@ -298,7 +303,7 @@ function TopBar({
         <input
           id="buscador"
           type="search"
-          placeholder="Buscar clientes, oportunidades, casos…"
+          placeholder="Buscar clientes, proyectos, casos…"
           className="w-full max-w-md rounded-lg border border-slate-200 bg-slate-50 py-2 pr-3 pl-9 text-sm text-slate-900 transition-colors duration-200 outline-none placeholder:text-slate-500 focus:border-blue-600 focus:bg-white focus:ring-2 focus:ring-blue-600/20 dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:placeholder:text-slate-400 dark:focus:border-blue-400"
         />
       </div>
