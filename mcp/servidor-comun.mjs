@@ -2,7 +2,7 @@
  * El servidor MCP del CRM, sin transporte.
  *
  * Aquí vive lo que comparten las dos formas de conectarse —el proceso stdio
- * local (`mcp/servidor.mjs`) y el endpoint remoto (`/api/mcp`)—: las mismas 19
+ * local (`mcp/servidor.mjs`) y el endpoint remoto (`/api/mcp`)—: las mismas 26
  * herramientas y las mismas instrucciones. Cambiar de transporte no debería
  * cambiar lo que Claude puede hacer, así que solo hay una definición de eso.
  *
@@ -17,7 +17,8 @@ import { registrarEscritura } from "./herramientas-escritura.mjs";
 
 const INSTRUCCIONES =
   "Este servidor da acceso al CRM de Sirius Regenerative: clientes, contactos, visitas " +
-  "comerciales, casos PQRSF, pedidos y catálogo de productos.\n\n" +
+  "comerciales, casos PQRSF, pedidos, cotizaciones, proyectos (pruebas de campo " +
+  "con su cronograma de tareas) y catálogo de productos.\n\n" +
   "Cómo usarlo bien:\n" +
   "- `crm_quien_soy` primero si importa el alcance: según el nivel de acceso, las listas " +
   "traen los registros de todo el equipo o solo los de esta persona. Una lista corta " +

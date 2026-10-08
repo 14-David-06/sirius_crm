@@ -175,7 +175,17 @@ describe("leerDatosProyecto", () => {
   it("rechaza un producto que no existe", () => {
     expect(
       leerDatosProyecto({ ...base, productos: ["PROD-0000"] }, catalogo),
-    ).toEqual({ error: "Alguno de los productos no está en el catálogo." });
+    ).toEqual({ error: "«PROD-0000» no está en el catálogo de productos." });
+  });
+
+  it("acepta el nombre exacto sin importar tildes ni mayúsculas", () => {
+    const datos = leerDatosProyecto(
+      { ...base, productos: ["producto dós", "PROD-9002"] },
+      [...catalogo.slice(0, 1), { codigo: "PROD-9002", nombre: "Producto Dos" }],
+    );
+    expect(esErrorEntrada(datos)).toBe(false);
+    if (esErrorEntrada(datos)) return;
+    expect(datos.idProductosCore).toBe("PROD-9002");
   });
 
   it("exige nombre y objetivo, y fechas en orden", () => {

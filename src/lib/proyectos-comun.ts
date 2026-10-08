@@ -226,6 +226,15 @@ function cadena(valor: unknown): string | null {
   return typeof valor === "string" && valor.trim() ? valor.trim() : null;
 }
 
+function normalizarNombre(valor: string): string {
+  return valor
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function fecha(valor: unknown): string | null | "invalida" {
   const limpia = cadena(valor);
   if (!limpia) return null;
@@ -271,15 +280,27 @@ export function leerDatosProyecto(
     return { error: "La fecha de fin no puede ser anterior al inicio." };
   }
 
+  // Se acepta el código o el nombre exacto: el dashboard manda códigos, pero
+  // el conector MCP de alguien sin acceso al catálogo solo tiene el nombre
+  // que dijo la persona.
   const pedidos = Array.isArray(body.productos)
     ? body.productos.filter((v): v is string => typeof v === "string")
     : [];
-  const elegidos = catalogo.filter((producto) =>
-    pedidos.includes(producto.codigo),
-  );
-  if (elegidos.length !== new Set(pedidos).size) {
-    return { error: "Alguno de los productos no está en el catálogo." };
+  const elegidos: { codigo: string; nombre: string }[] = [];
+  for (const pedido of pedidos) {
+    const producto = catalogo.find(
+      (p) =>
+        p.codigo === pedido.trim() ||
+        normalizarNombre(p.nombre) === normalizarNombre(pedido),
+    );
+    if (!producto) {
+      return { error: `«${pedido}» no está en el catálogo de productos.` };
+    }
+    if (!elegidos.includes(producto)) elegidos.push(producto);
   }
+  // En el orden del catálogo, para que guardar dos veces lo mismo no
+  // aparezca en el historial como un cambio.
+  elegidos.sort((a, b) => catalogo.indexOf(a) - catalogo.indexOf(b));
 
   return {
     nombre,

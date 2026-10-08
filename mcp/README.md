@@ -1,10 +1,11 @@
 # Conector MCP del CRM
 
-Deja hablar a Claude con este CRM: consultar clientes, visitas, casos, pedidos y
-catálogo, y también registrar visitas, abrir casos PQRSF, crear pedidos y mover
-estados.
+Deja hablar a Claude con este CRM: consultar clientes, visitas, casos, pedidos,
+cotizaciones, proyectos y catálogo, y también registrar visitas, abrir casos
+PQRSF, crear pedidos y cotizaciones, llevar las pruebas de campo con sus tareas
+y mover estados.
 
-Hay **dos formas de conectarse a las mismas 16 herramientas**:
+Hay **dos formas de conectarse a las mismas 26 herramientas**:
 
 | | Remoto (`/api/mcp`) | Local (stdio) |
 | --- | --- | --- |
@@ -168,6 +169,9 @@ eso el token de acceso dura una hora y no un mes.
 | `crm_listar_casos` | Casos PQRSF, con filtro de pendientes y vencidos. |
 | `crm_listar_pedidos` | Pedidos con sus renglones y su total. |
 | `crm_listar_productos` | Catálogo con precio de lista. |
+| `crm_listar_cotizaciones` | Ofertas emitidas, con filtro de vencidas. |
+| `crm_listar_proyectos` | Pruebas de campo con su avance, atrasos y veredicto. |
+| `crm_detalle_proyecto` | Una prueba completa: cronograma de tareas, bitácora y resultados. |
 
 **Escritura** — quedan en Airtable y las lee el resto del equipo. En el conector
 remoto solo aparecen si la persona concedió el permiso al autorizar.
@@ -181,6 +185,13 @@ remoto solo aparecen si la persona concedió el permiso al autorizar.
 | `crm_actualizar_caso` | Mueve el estado, corrige datos o cambia el plazo. |
 | `crm_crear_pedido` | Registra un pedido con sus renglones. |
 | `crm_cambiar_estado_pedido` | Mueve un pedido de estado. |
+| `crm_crear_cotizacion` | Emite una oferta comercial con sus renglones. |
+| `crm_cambiar_estado_cotizacion` | Mueve una cotización de estado. |
+| `crm_crear_proyecto` | Abre una prueba de campo con un cliente. |
+| `crm_actualizar_proyecto` | Corrige sus datos o registra los resultados. |
+| `crm_cambiar_estado_proyecto` | Lo mueve de estado; finalizar exige resultados y veredicto. |
+| `crm_anotar_avance_proyecto` | Agrega una línea a la bitácora de ejecución. |
+| `crm_gestionar_tarea_proyecto` | Crea, replanea o avanza una tarea del cronograma. |
 
 Dos comodidades que valen la pena conocer:
 
@@ -198,8 +209,8 @@ Dos comodidades que valen la pena conocer:
 | Archivo | Qué hace |
 | --- | --- |
 | `servidor-comun.mjs` | Registra las herramientas. Lo comparten los dos transportes. |
-| `herramientas-lectura.mjs` | Las nueve de consulta. |
-| `herramientas-escritura.mjs` | Las siete que escriben. |
+| `herramientas-lectura.mjs` | Las doce de consulta. |
+| `herramientas-escritura.mjs` | Las catorce que escriben. |
 | `cliente-crm.mjs` | Las llamadas HTTP al CRM, con sesión por login o por cookie. |
 | `comun.mjs` | Resolver cliente/producto por nombre, filtros, formato. |
 | `opciones.mjs` | Copia de las listas de opciones del CRM. |

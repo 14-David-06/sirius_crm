@@ -148,3 +148,76 @@ export function respuesta(datos) {
     content: [{ type: "text", text: JSON.stringify(datos, null, 1) }],
   };
 }
+
+/**
+ * Una persona activa del equipo, por nombre o por ID de empleado. Igual que
+ * con los clientes, ante varios candidatos no elige: asignarle una tarea a
+ * otra persona es peor que preguntar.
+ */
+export async function resolverPersona(api, referencia) {
+  const { personal } = await api.obtener("/api/personal");
+  const buscado = normalizar(referencia);
+
+  const exacto = personal.find(
+    (persona) =>
+      normalizar(persona.idEmpleado) === buscado ||
+      normalizar(persona.nombre) === buscado,
+  );
+  if (exacto) return exacto;
+
+  // Todas las palabras dichas tienen que estar en el nombre: «Claudia Gómez»
+  // encuentra a «Claudia Viviana Gómez Álvarez».
+  const palabras = buscado.split(" ").filter(Boolean);
+  const parciales = personal.filter((persona) =>
+    palabras.every((palabra) => normalizar(persona.nombre).includes(palabra)),
+  );
+  if (parciales.length === 1) return parciales[0];
+
+  if (parciales.length === 0) {
+    throw new Error(
+      `No hay nadie activo en el equipo que coincida con «${referencia}».`,
+    );
+  }
+
+  const lista = parciales
+    .slice(0, 10)
+    .map((persona) => `${persona.idEmpleado} — ${persona.nombre}`)
+    .join("; ");
+  throw new Error(
+    `«${referencia}» coincide con ${parciales.length} personas: ${lista}. Precisa cuál.`,
+  );
+}
+
+/**
+ * Un proyecto de los que la sesión puede ver, por serial, record id o nombre.
+ * Ante varios candidatos no elige, por la misma razón que con los clientes.
+ */
+export async function resolverProyecto(api, referencia) {
+  const { proyectos } = await api.obtener("/api/proyectos");
+
+  const exacto =
+    porId(proyectos, referencia) ??
+    proyectos.find(
+      (proyecto) => normalizar(proyecto.nombre) === normalizar(referencia),
+    );
+  if (exacto) return exacto;
+
+  const parciales = proyectos.filter((proyecto) =>
+    contiene(proyecto.nombre, referencia),
+  );
+  if (parciales.length === 1) return parciales[0];
+
+  if (parciales.length === 0) {
+    throw new Error(
+      `No encuentro el proyecto «${referencia}» entre los que puedes ver. Usa crm_listar_proyectos.`,
+    );
+  }
+
+  const lista = parciales
+    .slice(0, 10)
+    .map((proyecto) => `${proyecto.id} — ${proyecto.nombre} (${proyecto.cliente})`)
+    .join("; ");
+  throw new Error(
+    `«${referencia}» coincide con ${parciales.length} proyectos: ${lista}. Precisa cuál.`,
+  );
+}

@@ -100,3 +100,23 @@ export const FORMAS_PAGO = [
   "Credito a 30 dias",
   "Credito a 45 dias",
 ];
+
+export const ESTADOS_PROYECTO = [
+  "Planeación",
+  "En ejecución",
+  "En evaluación",
+  "Finalizado",
+  "Cancelado",
+];
+
+/** Un proyecto en estos estados ya no exige trabajo. */
+export const ESTADOS_PROYECTO_CERRADOS = ["Finalizado", "Cancelado"];
+
+export const VEREDICTOS_PROYECTO = [
+  "Exitosa",
+  "Parcial",
+  "No exitosa",
+  "No concluyente",
+];
+
+export const ESTADOS_TAREA = ["Pendiente", "En curso", "Completada", "Cancelada"];

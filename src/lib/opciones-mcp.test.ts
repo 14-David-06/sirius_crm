@@ -27,6 +27,12 @@ import {
   ESTADOS_PEDIDO,
   estaCerradoPedido,
 } from "@/lib/pedidos-comun";
+import {
+  ESTADOS_PROYECTO,
+  ESTADOS_TAREA,
+  proyectoCerrado,
+  VEREDICTOS,
+} from "@/lib/proyectos-comun";
 
 import * as mcp from "../../mcp/opciones.mjs";
 
@@ -61,6 +67,20 @@ describe("las opciones del conector MCP", () => {
     for (const estado of ESTADOS_COTIZACION) {
       expect(mcp.ESTADOS_COTIZACION_CERRADOS.includes(estado)).toBe(
         estaCerradaCotizacion(estado),
+      );
+    }
+  });
+
+  it("replican las de Proyectos", () => {
+    expect(mcp.ESTADOS_PROYECTO).toEqual([...ESTADOS_PROYECTO]);
+    expect(mcp.VEREDICTOS_PROYECTO).toEqual([...VEREDICTOS]);
+    expect(mcp.ESTADOS_TAREA).toEqual([...ESTADOS_TAREA]);
+  });
+
+  it("coinciden con qué estado de proyecto está cerrado", () => {
+    for (const estado of ESTADOS_PROYECTO) {
+      expect(mcp.ESTADOS_PROYECTO_CERRADOS.includes(estado)).toBe(
+        proyectoCerrado(estado),
       );
     }
   });

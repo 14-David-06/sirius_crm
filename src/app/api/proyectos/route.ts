@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { esErrorAutoria, resolverAutoria } from "@/lib/autoria";
 import { ETIQUETAS, invalidar } from "@/lib/cache";
+import { hoyEnBogota } from "@/lib/crm";
 import { permisosDe } from "@/lib/permisos";
 import { listarProductos } from "@/lib/productos";
 import {
@@ -10,10 +11,12 @@ import {
   listarTareasProyecto,
 } from "@/lib/proyectos";
 import {
+  calcularAvance,
   esErrorEntrada,
   ESTADOS_PROYECTO,
   leerDatosProyecto,
   participaEnProyecto,
+  proyectoAtrasado,
   proyectoCerrado,
   type EstadoProyecto,
 } from "@/lib/proyectos-comun";
@@ -34,15 +37,21 @@ export async function GET() {
       listarProyectos(),
       listarTareasProyecto(),
     ]);
+    const hoy = hoyEnBogota();
     return NextResponse.json({
-      proyectos: proyectos.filter((proyecto) =>
-        participaEnProyecto(
-          permisos,
-          proyecto,
-          tareas.filter((tarea) => tarea.proyecto === proyecto.recordId),
-          session,
-        ),
-      ),
+      // Cada proyecto lleva su avance ya calculado: sin él, quien consume la
+      // lista tendría que pedir las tareas de cada uno por separado.
+      proyectos: proyectos.flatMap((proyecto) => {
+        const suyas = tareas.filter((t) => t.proyecto === proyecto.recordId);
+        if (!participaEnProyecto(permisos, proyecto, suyas, session)) return [];
+        return [
+          {
+            ...proyecto,
+            avance: calcularAvance(suyas, hoy),
+            atrasado: proyectoAtrasado(proyecto, hoy),
+          },
+        ];
+      }),
     });
   } catch (error) {
     console.error("listar proyectos", error);

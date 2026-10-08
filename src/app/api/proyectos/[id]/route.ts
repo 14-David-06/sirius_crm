@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { ETIQUETAS, invalidar } from "@/lib/cache";
+import { hoyEnBogota } from "@/lib/crm";
 import { permisosDe } from "@/lib/permisos";
 import { listarProductos } from "@/lib/productos";
 import {
@@ -13,11 +14,15 @@ import {
   resolverEncargado,
 } from "@/lib/proyectos";
 import {
+  alertaTarea,
+  calcularAvance,
   esErrorEntrada,
   ESTADOS_PROYECTO,
   leerCierre,
   leerDatosProyecto,
   participaEnProyecto,
+  proyectoAtrasado,
+  puedeAvanzarTarea,
   puedeGestionarProyecto,
   type EstadoProyecto,
 } from "@/lib/proyectos-comun";
@@ -26,6 +31,62 @@ import { getSession } from "@/lib/session";
 export const runtime = "nodejs";
 
 const RECORD_ID = /^rec[A-Za-z0-9]{14}$/;
+
+/**
+ * Un proyecto con sus tareas, para quien participa en él. Lee sin caché: lo
+ * pide quien está por escribir, y tiene que ver lo último.
+ */
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+  }
+
+  const { id } = await params;
+  if (!RECORD_ID.test(id)) {
+    return NextResponse.json({ error: "Proyecto inválido." }, { status: 400 });
+  }
+
+  const permisos = permisosDe(session);
+
+  try {
+    const [proyecto, tareas] = await Promise.all([
+      obtenerProyecto(id),
+      listarTareasDe(id),
+    ]);
+    // Un proyecto ajeno responde igual que uno inexistente.
+    if (!proyecto || !participaEnProyecto(permisos, proyecto, tareas, session)) {
+      return NextResponse.json(
+        { error: "El proyecto no existe o no participas en él." },
+        { status: 404 },
+      );
+    }
+
+    const hoy = hoyEnBogota();
+    return NextResponse.json({
+      proyecto: {
+        ...proyecto,
+        avance: calcularAvance(tareas, hoy),
+        atrasado: proyectoAtrasado(proyecto, hoy),
+      },
+      tareas: tareas.map((tarea) => ({
+        ...tarea,
+        alerta: alertaTarea(tarea, hoy),
+        puedeAvanzar: puedeAvanzarTarea(permisos, proyecto, tarea, session),
+      })),
+      puedeGestionar: puedeGestionarProyecto(permisos, proyecto, session),
+    });
+  } catch (error) {
+    console.error("leer proyecto", error);
+    return NextResponse.json(
+      { error: "No pudimos leer el proyecto." },
+      { status: 502 },
+    );
+  }
+}
 
 /**
  * Corrige el proyecto, cambia su estado o sus resultados, o anota un avance

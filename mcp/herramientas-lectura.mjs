@@ -11,9 +11,14 @@ import {
   hoy,
   limpiar,
   resolverCliente,
+  resolverProyecto,
   respuesta,
 } from "./comun.mjs";
-import { ESTADOS_COTIZACION_CERRADOS } from "./opciones.mjs";
+import {
+  ESTADOS_COTIZACION_CERRADOS,
+  ESTADOS_PROYECTO,
+  ESTADOS_PROYECTO_CERRADOS,
+} from "./opciones.mjs";
 
 const SOLO_LECTURA = { readOnlyHint: true, openWorldHint: false };
 
@@ -120,6 +125,45 @@ export function resumirCotizacion(cotizacion) {
         subtotal: linea.subtotal,
       }),
     ),
+  });
+}
+
+/** Lo que de un proyecto interesa en una lista: sin bitácora ni historial. */
+export function resumirProyecto(proyecto) {
+  return limpiar({
+    id: proyecto.id,
+    recordId: proyecto.recordId,
+    nombre: proyecto.nombre,
+    cliente: proyecto.cliente,
+    idClienteCore: proyecto.idClienteCore,
+    cultivo: proyecto.cultivo,
+    ubicacion: proyecto.ubicacion,
+    productos: proyecto.productos,
+    estado: proyecto.estado,
+    lider: proyecto.responsable,
+    fechaInicio: proyecto.fechaInicio,
+    fechaFinPlaneada: proyecto.fechaFinPlaneada,
+    fechaCierre: proyecto.fechaCierre,
+    atrasado: proyecto.atrasado || undefined,
+    avance: proyecto.avance,
+    veredicto: proyecto.veredicto,
+  });
+}
+
+export function resumirTarea(tarea) {
+  return limpiar({
+    id: tarea.id,
+    recordId: tarea.recordId,
+    tarea: tarea.tarea,
+    descripcion: tarea.descripcion,
+    encargado: tarea.responsable,
+    estado: tarea.estado,
+    alerta: tarea.alerta,
+    fechaInicio: tarea.fechaInicio,
+    fechaFin: tarea.fechaFin,
+    fechaCompletada: tarea.fechaCompletada,
+    notas: tarea.notas,
+    puedesAvanzarla: tarea.puedeAvanzar,
   });
 }
 
@@ -653,6 +697,119 @@ export function registrarLectura(servidor, api) {
           ...resumirCotizacion(cotizacion),
           vencida: vencida(cotizacion, dia),
         })),
+      });
+    },
+  );
+
+  servidor.registerTool(
+    "crm_listar_proyectos",
+    {
+      title: "Proyectos (pruebas de campo)",
+      description:
+        "Las pruebas de campo de productos Sirius con clientes. Cada una trae su avance " +
+        "(tareas completadas sobre las vigentes, y cuántas están vencidas) y si ya pasó " +
+        "su fecha de fin planeada. Quien no es Admin ve los proyectos que lidera y " +
+        "aquellos donde tiene alguna tarea.",
+      inputSchema: {
+        cliente: z.string().optional(),
+        estado: z.enum(ESTADOS_PROYECTO).optional(),
+        soloActivos: z
+          .boolean()
+          .optional()
+          .describe("Solo los que siguen abiertos: ni finalizados ni cancelados."),
+        soloAtrasados: z
+          .boolean()
+          .optional()
+          .describe("Abiertos que ya pasaron su fecha de fin, o con tareas vencidas."),
+        lider: z.string().optional().describe("Nombre del líder, completo o en parte."),
+        producto: z.string().optional().describe("Nombre del producto evaluado."),
+        limite: z.number().int().min(1).max(200).optional(),
+      },
+      annotations: SOLO_LECTURA,
+    },
+    async ({
+      cliente: referencia,
+      estado,
+      soloActivos,
+      soloAtrasados,
+      lider,
+      producto,
+      limite = 30,
+    }) => {
+      const { proyectos } = await obtener("/api/proyectos");
+      const cliente = referencia ? await resolverCliente(api, referencia) : null;
+
+      const filtrados = proyectos.filter((proyecto) => {
+        const cerrado = ESTADOS_PROYECTO_CERRADOS.includes(proyecto.estado);
+        if (cliente && !esDelCliente(proyecto, cliente)) return false;
+        if (estado && proyecto.estado !== estado) return false;
+        if (soloActivos && cerrado) return false;
+        if (
+          soloAtrasados &&
+          (cerrado || (!proyecto.atrasado && proyecto.avance.vencidas === 0))
+        ) {
+          return false;
+        }
+        if (lider && !contiene(proyecto.responsable, lider)) return false;
+        if (producto && !contiene(proyecto.productos, producto)) return false;
+        return true;
+      });
+
+      const finalizados = filtrados.filter((p) => p.estado === "Finalizado");
+      return respuesta({
+        hoy: hoy(),
+        total: filtrados.length,
+        mostrados: Math.min(filtrados.length, limite),
+        veredictos: Object.fromEntries(
+          [...new Set(finalizados.map((p) => p.veredicto ?? "Sin veredicto"))].map(
+            (v) => [v, finalizados.filter((p) => (p.veredicto ?? "Sin veredicto") === v).length],
+          ),
+        ),
+        proyectos: filtrados.slice(0, limite).map(resumirProyecto),
+      });
+    },
+  );
+
+  servidor.registerTool(
+    "crm_detalle_proyecto",
+    {
+      title: "Detalle de un proyecto",
+      description:
+        "Todo de una prueba de campo: objetivo, metodología, indicadores, el cronograma " +
+        "de tareas con su encargado y alerta, la bitácora de ejecución y los resultados. " +
+        "`puedesGestionarlo` dice si esta sesión puede editarlo, crear tareas o cambiar " +
+        "su estado; `puedesAvanzarla` en cada tarea, si puede mover su estado.",
+      inputSchema: {
+        proyecto: z
+          .string()
+          .describe("Serial PRY-000X, record id o parte del nombre del proyecto."),
+      },
+      annotations: SOLO_LECTURA,
+    },
+    async ({ proyecto: referencia }) => {
+      const { recordId } = await resolverProyecto(api, referencia);
+      const { proyecto, tareas, puedeGestionar } = await obtener(
+        `/api/proyectos/${recordId}`,
+      );
+
+      return respuesta({
+        hoy: hoy(),
+        proyecto: {
+          ...resumirProyecto(proyecto),
+          ...limpiar({
+            objetivo: proyecto.objetivo,
+            metodologia: proyecto.metodologia,
+            indicadores: proyecto.indicadores,
+            observaciones: proyecto.observaciones,
+            resultados: proyecto.resultados,
+            conclusion: proyecto.conclusion,
+            // Las líneas ya traen fecha y autor; se devuelven en orden de
+            // escritura, la más reciente al final.
+            bitacora: proyecto.bitacora?.split(/\r?\n/).filter(Boolean),
+          }),
+        },
+        puedesGestionarlo: puedeGestionar,
+        tareas: tareas.map(resumirTarea),
       });
     },
   );
