@@ -20,7 +20,7 @@ import {
 } from "./icons";
 
 const card =
-  "tarjeta3d rounded-xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900";
+  "rounded-xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900";
 
 /* ------------------------------- KPIs ---------------------------------- */
 
