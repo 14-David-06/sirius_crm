@@ -2,6 +2,8 @@
   "name": "sirius_crm",
   "version": "0.1.0",
   "private": true,
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "Hermes David Hernández García",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
