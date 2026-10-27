@@ -11,6 +11,7 @@ import {
   formatearVigencia,
   NOTA_MODALIDAD,
   obtenerCotizacion,
+  rotuloTramoIva,
   textoLegal,
   type LineaCotizacion,
   type ModalidadEntrega,
@@ -172,6 +173,7 @@ export default async function DocumentoCotizacionPage({
                 <th>Descripción</th>
                 <th>Cantidad</th>
                 <th>Valor unit.</th>
+                <th>IVA</th>
                 <th>Total</th>
               </tr>
             </thead>
@@ -181,26 +183,28 @@ export default async function DocumentoCotizacionPage({
               ))}
 
               <tr className="sub">
-                <td colSpan={3}>Subtotal antes de IVA</td>
+                <td colSpan={4}>Subtotal antes de IVA</td>
                 <td>{formatearPesos(cotizacion.subtotal)}</td>
               </tr>
-              <tr className="sub">
-                <td colSpan={3}>
-                  IVA
-                  {cotizacion.ivaPorcentaje !== null
-                    ? ` ${cotizacion.ivaPorcentaje} %`
-                    : ""}
-                </td>
-                <td>
-                  {/* Sin IVA definido el documento lo dice, en vez de imprimir
-                      un cero que nadie autorizó. */}
-                  {cotizacion.iva === null
-                    ? "Por confirmar"
-                    : formatearPesos(cotizacion.iva)}
-                </td>
-              </tr>
+              {cotizacion.tramosIva.map((tramo) => (
+                <tr className="sub" key={tramo.porcentaje ?? "pendiente"}>
+                  <td colSpan={4}>
+                    {rotuloTramoIva(tramo.porcentaje)}
+                    {cotizacion.tramosIva.length > 1
+                      ? ` sobre ${formatearPesos(tramo.base)}`
+                      : ""}
+                  </td>
+                  <td>
+                    {/* Sin IVA definido el documento lo dice, en vez de imprimir
+                        un cero que nadie autorizó. */}
+                    {tramo.iva === null
+                      ? "Por confirmar"
+                      : formatearPesos(tramo.iva)}
+                  </td>
+                </tr>
+              ))}
               <tr className="total">
-                <td colSpan={3}>Valor total de la oferta (COP)</td>
+                <td colSpan={4}>Valor total de la oferta (COP)</td>
                 <td>{formatearPesos(cotizacion.total)}</td>
               </tr>
             </tbody>
@@ -400,6 +404,11 @@ function Renglon({ linea }: { linea: LineaCotizacion }) {
         {linea.unidad ? ` ${linea.unidad}` : ""}
       </td>
       <td>{formatearPesos(linea.precioUnitario)}</td>
+      <td>
+        {linea.ivaPorcentaje === null
+          ? "Por confirmar"
+          : `${linea.ivaPorcentaje} %`}
+      </td>
       <td>{formatearPesos(linea.subtotal)}</td>
     </tr>
   );

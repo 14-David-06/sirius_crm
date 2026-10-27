@@ -107,9 +107,10 @@ export function resumirCotizacion(cotizacion) {
     fechaCierre: cotizacion.fechaCierre,
     motivoCierre: cotizacion.motivoCierre,
     subtotal: cotizacion.subtotal,
-    // Null cuando el IVA esta por confirmar, que no es lo mismo que 0 %.
-    ivaPorcentaje: cotizacion.ivaPorcentaje,
+    // Null cuando el IVA de algun renglon esta por confirmar, que no es 0 %.
     iva: cotizacion.iva,
+    // El IVA discriminado por tarifa: cada producto lleva la suya.
+    tramosIva: cotizacion.tramosIva,
     total: cotizacion.total,
     modalidadEntrega: cotizacion.modalidadEntrega,
     puntoEntrega: cotizacion.puntoEntrega,
@@ -122,6 +123,8 @@ export function resumirCotizacion(cotizacion) {
         cantidad: linea.cantidad,
         unidad: linea.unidad,
         precioUnitario: linea.precioUnitario,
+        // Ausente es por confirmar; 0 es exento o excluido.
+        ivaPorcentaje: linea.ivaPorcentaje,
         subtotal: linea.subtotal,
       }),
     ),

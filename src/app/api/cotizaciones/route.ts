@@ -124,9 +124,10 @@ export async function POST(request: Request) {
     );
   }
 
-  // Vacío es "por confirmar con facturación", que no es lo mismo que 0 %.
-  const iva = decimalOpcional(body.ivaPorcentaje);
-  if (iva === "invalido" || (iva !== undefined && (iva < 0 || iva > 100))) {
+  // El IVA general solo cubre los renglones que no traen el suyo. Vacío es
+  // "por confirmar con facturación", que no es lo mismo que 0 %.
+  const iva = porcentajeOpcional(body.ivaPorcentaje);
+  if (iva === "invalido") {
     return NextResponse.json(
       { error: "El IVA debe ser un porcentaje entre 0 y 100, o quedar vacío." },
       { status: 400 },
@@ -367,6 +368,12 @@ function leerLineas(
       return "El precio de cada renglón debe ser un número igual o mayor que cero.";
     }
 
+    // Cada producto lleva su tarifa: unos están gravados y otros no.
+    const iva = porcentajeOpcional(item.ivaPorcentaje);
+    if (iva === "invalido") {
+      return `El IVA de «${producto.nombre}» debe ser un porcentaje entre 0 y 100, o quedar vacío.`;
+    }
+
     lineas.push({
       idProductoCore,
       producto: producto.nombre,
@@ -376,6 +383,7 @@ function leerLineas(
       cantidad,
       unidad: producto.unidad ?? undefined,
       precioUnitario: precio,
+      ivaPorcentaje: iva,
     });
   }
 
@@ -403,5 +411,13 @@ function decimalOpcional(valor: unknown): number | undefined | "invalido" {
   const numero = typeof valor === "number" ? valor : Number(String(valor));
   if (!Number.isFinite(numero)) return "invalido";
 
+  return numero;
+}
+
+/** Un porcentaje de IVA opcional entre 0 y 100; vacío queda por confirmar. */
+function porcentajeOpcional(valor: unknown): number | undefined | "invalido" {
+  const numero = decimalOpcional(valor);
+  if (numero === "invalido") return numero;
+  if (numero !== undefined && (numero < 0 || numero > 100)) return "invalido";
   return numero;
 }

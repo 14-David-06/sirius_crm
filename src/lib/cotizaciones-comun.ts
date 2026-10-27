@@ -136,40 +136,109 @@ export function estaVencidaPorFecha(
 
 /* -------------------------------- Totales -------------------------------- */
 
-export type LineaMonetaria = { cantidad: number; precioUnitario: number };
+export type LineaMonetaria = {
+  cantidad: number;
+  precioUnitario: number;
+  /**
+   * El IVA propio del renglón: no todos los productos lo llevan. Sin él, el
+   * renglón toma el de la cabecera, que es como se emitieron las cotizaciones
+   * anteriores a que el IVA fuera por producto.
+   */
+  ivaPorcentaje?: number | null;
+};
+
+/** Lo que paga cada tarifa de IVA; `porcentaje` null es la parte por confirmar. */
+export type TramoIva = {
+  porcentaje: number | null;
+  base: number;
+  /** null mientras la tarifa esté por confirmar. */
+  iva: number | null;
+};
 
 export type Totales = {
   subtotal: number;
-  /** null cuando el IVA está por confirmar; 0 solo si el IVA es realmente 0 %. */
+  /**
+   * null si algún renglón tiene el IVA por confirmar; 0 solo si el IVA es
+   * realmente 0 %.
+   */
   iva: number | null;
-  /** El subtotal cuando el IVA está por confirmar: nunca se asume exento. */
+  /** Sin el IVA que falta por confirmar: nunca se asume exento. */
   total: number;
+  /** Una entrada por tarifa, de menor a mayor; la por confirmar va al final. */
+  tramos: TramoIva[];
 };
+
+/** La tarifa con la que se liquida un renglón: la suya o, si no tiene, la general. */
+export function ivaDeLinea(
+  linea: Pick<LineaMonetaria, "ivaPorcentaje">,
+  ivaGeneral: number | null,
+): number | null {
+  const propio = linea.ivaPorcentaje;
+  if (propio !== undefined && propio !== null) {
+    return Number.isFinite(propio) ? propio : null;
+  }
+  return ivaGeneral !== null && Number.isFinite(ivaGeneral) ? ivaGeneral : null;
+}
 
 /**
  * La aritmética de la oferta.
  *
+ * Cada renglón lleva su tarifa, porque en una misma oferta conviven productos
+ * gravados y excluidos. El IVA se agrupa por tarifa y se redondea por grupo:
+ * es como se discrimina en la factura, y redondear renglón por renglón
+ * descuadraría el total contra ella por unos pesos.
+ *
  * El IVA sin definir no es cero. El formato lo dice explícitamente —"% a
  * confirmar con facturación"— y tratarlo como cero imprimiría un total en
- * firme que nadie autorizó. Por eso `iva` es `null` y no `0`, y el total
- * declara que le falta ese renglón.
+ * firme que nadie autorizó. Por eso basta un renglón sin tarifa para que
+ * `iva` sea `null`, y el total declara que le falta esa parte.
  */
 export function totalesDe(
   lineas: LineaMonetaria[],
-  ivaPorcentaje: number | null,
+  ivaGeneral: number | null,
 ): Totales {
-  const subtotal = lineas.reduce(
-    (suma, linea) => suma + linea.cantidad * linea.precioUnitario,
-    0,
-  );
+  const bases = new Map<number | null, number>();
+  let subtotal = 0;
 
-  if (ivaPorcentaje === null || !Number.isFinite(ivaPorcentaje)) {
-    return { subtotal, iva: null, total: subtotal };
+  for (const linea of lineas) {
+    const base = linea.cantidad * linea.precioUnitario;
+    const porcentaje = ivaDeLinea(linea, ivaGeneral);
+    subtotal += base;
+    bases.set(porcentaje, (bases.get(porcentaje) ?? 0) + base);
   }
 
-  // Se redondea el IVA y no el total: es la cifra que va en la factura.
-  const iva = Math.round((subtotal * ivaPorcentaje) / 100);
-  return { subtotal, iva, total: subtotal + iva };
+  const tramos: TramoIva[] = [...bases.entries()]
+    .map(([porcentaje, base]) => ({
+      porcentaje,
+      base,
+      // Se redondea el IVA y no el total: es la cifra que va en la factura.
+      iva: porcentaje === null ? null : Math.round((base * porcentaje) / 100),
+    }))
+    .sort((a, b) =>
+      a.porcentaje === null
+        ? 1
+        : b.porcentaje === null
+          ? -1
+          : a.porcentaje - b.porcentaje,
+    );
+
+  const conocido = tramos.reduce((suma, tramo) => suma + (tramo.iva ?? 0), 0);
+  const pendiente = tramos.some((tramo) => tramo.porcentaje === null);
+
+  return {
+    subtotal,
+    iva: pendiente ? null : conocido,
+    total: subtotal + conocido,
+    tramos,
+  };
+}
+
+/** Las tarifas de IVA vigentes en Colombia: excluido o exento, reducida y general. */
+export const TARIFAS_IVA = [0, 5, 19] as const;
+
+/** "IVA 19 %", "IVA 0 %" o "IVA por confirmar", como se rotula cada tramo. */
+export function rotuloTramoIva(porcentaje: number | null): string {
+  return porcentaje === null ? "IVA por confirmar" : `IVA ${porcentaje} %`;
 }
 
 /* ------------------------------ Consecutivo ------------------------------ */

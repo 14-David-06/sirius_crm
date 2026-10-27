@@ -84,7 +84,70 @@ describe("totalesDe", () => {
   });
 
   it("una oferta sin renglones vale cero, no NaN", () => {
-    expect(totalesDe([], 19)).toEqual({ subtotal: 0, iva: 0, total: 0 });
+    expect(totalesDe([], 19)).toEqual({
+      subtotal: 0,
+      iva: 0,
+      total: 0,
+      tramos: [],
+    });
+  });
+
+  it("cada renglón liquida su propia tarifa", () => {
+    const totales = totalesDe(
+      [
+        { cantidad: 1, precioUnitario: 100_000, ivaPorcentaje: 19 },
+        { cantidad: 1, precioUnitario: 100_000, ivaPorcentaje: 0 },
+        { cantidad: 2, precioUnitario: 50_000, ivaPorcentaje: 5 },
+      ],
+      null,
+    );
+    expect(totales.iva).toBe(24_000);
+    expect(totales.total).toBe(324_000);
+    expect(totales.tramos.map((t) => [t.porcentaje, t.base, t.iva])).toEqual([
+      [0, 100_000, 0],
+      [5, 100_000, 5_000],
+      [19, 100_000, 19_000],
+    ]);
+  });
+
+  it("agrupa por tarifa y redondea por grupo, como la factura", () => {
+    const totales = totalesDe(
+      [
+        { cantidad: 1, precioUnitario: 1_001, ivaPorcentaje: 19 },
+        { cantidad: 1, precioUnitario: 1_001, ivaPorcentaje: 19 },
+      ],
+      null,
+    );
+    // 380,38 redondeado una vez, no 190 + 190.
+    expect(totales.iva).toBe(380);
+  });
+
+  it("un renglón sin tarifa deja el IVA por confirmar sin perder el resto", () => {
+    const totales = totalesDe(
+      [
+        { cantidad: 1, precioUnitario: 100_000, ivaPorcentaje: 19 },
+        { cantidad: 1, precioUnitario: 50_000, ivaPorcentaje: null },
+      ],
+      null,
+    );
+    expect(totales.iva).toBeNull();
+    expect(totales.total).toBe(169_000);
+    expect(totales.tramos.at(-1)).toEqual({
+      porcentaje: null,
+      base: 50_000,
+      iva: null,
+    });
+  });
+
+  it("el renglón sin tarifa propia hereda la de la cabecera", () => {
+    const totales = totalesDe(
+      [
+        { cantidad: 1, precioUnitario: 100_000 },
+        { cantidad: 1, precioUnitario: 100_000, ivaPorcentaje: 0 },
+      ],
+      19,
+    );
+    expect(totales.iva).toBe(19_000);
   });
 });
 

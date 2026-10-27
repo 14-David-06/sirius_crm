@@ -16,6 +16,7 @@ import {
   formatearPesos,
   formatearRevision,
   formatearVigencia,
+  rotuloTramoIva,
   siguientesEstadosCotizacion,
   type FiltrosCotizacion,
 } from "@/lib/cotizaciones-comun";
@@ -526,32 +527,36 @@ function FilaCotizacionTabla({
                           <td className="py-2 pr-4 whitespace-nowrap text-slate-600 tabular-nums dark:text-slate-400">
                             {formatearPesos(linea.precioUnitario)}
                           </td>
+                          <td className="py-2 pr-4 whitespace-nowrap text-slate-600 tabular-nums dark:text-slate-400">
+                            {linea.ivaPorcentaje === null
+                              ? "IVA por confirmar"
+                              : `IVA ${linea.ivaPorcentaje} %`}
+                          </td>
                           <td className="py-2 text-right font-medium whitespace-nowrap tabular-nums">
                             {formatearPesos(linea.subtotal)}
                           </td>
                         </tr>
                       ))}
                       <tr>
-                        <td colSpan={3} className="py-2 text-slate-600 dark:text-slate-400">
+                        <td colSpan={4} className="py-2 text-slate-600 dark:text-slate-400">
                           Subtotal
                         </td>
                         <td className="py-2 text-right whitespace-nowrap tabular-nums">
                           {formatearPesos(cotizacion.subtotal)}
                         </td>
                       </tr>
-                      <tr>
-                        <td colSpan={3} className="py-2 text-slate-600 dark:text-slate-400">
-                          IVA
-                          {cotizacion.ivaPorcentaje !== null
-                            ? ` ${cotizacion.ivaPorcentaje} %`
-                            : ""}
-                        </td>
-                        <td className="py-2 text-right whitespace-nowrap tabular-nums">
-                          {cotizacion.iva === null
-                            ? "Por confirmar"
-                            : formatearPesos(cotizacion.iva)}
-                        </td>
-                      </tr>
+                      {cotizacion.tramosIva.map((tramo) => (
+                        <tr key={tramo.porcentaje ?? "pendiente"}>
+                          <td colSpan={4} className="py-2 text-slate-600 dark:text-slate-400">
+                            {rotuloTramoIva(tramo.porcentaje)}
+                          </td>
+                          <td className="py-2 text-right whitespace-nowrap tabular-nums">
+                            {tramo.iva === null
+                              ? "Por confirmar"
+                              : formatearPesos(tramo.iva)}
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 )}

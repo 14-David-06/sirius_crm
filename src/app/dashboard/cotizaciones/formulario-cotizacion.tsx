@@ -10,6 +10,8 @@ import {
   FORMAS_PAGO,
   formatearPesos,
   MODALIDADES_ENTREGA,
+  rotuloTramoIva,
+  TARIFAS_IVA,
   totalesDe,
   VIGENCIA_POR_DEFECTO,
   type EstadoCotizacion,
@@ -29,6 +31,8 @@ type Renglon = {
   codigo: string;
   cantidad: string;
   precio: string;
+  /** Vacío es por confirmar, no 0 %. */
+  iva: string;
   descripcion: string;
 };
 
@@ -38,8 +42,14 @@ function renglonVacio(indice: number): Renglon {
     codigo: "",
     cantidad: "",
     precio: "",
+    iva: "",
     descripcion: "",
   };
+}
+
+/** El IVA del renglón como número, o null si quedó vacío. */
+function ivaDeRenglon(renglon: Renglon): number | null {
+  return renglon.iva.trim() === "" ? null : Number(renglon.iva);
 }
 
 export function FormularioCotizacion({
@@ -66,7 +76,6 @@ export function FormularioCotizacion({
   const [fechaEmision, setFechaEmision] = useState(hoy);
   const [vigencia, setVigencia] = useState(String(VIGENCIA_POR_DEFECTO));
   const [estado, setEstado] = useState<EstadoCotizacion>("Borrador");
-  const [iva, setIva] = useState("");
 
   const [renglones, setRenglones] = useState<Renglon[]>([renglonVacio(0)]);
 
@@ -116,10 +125,13 @@ export function FormularioCotizacion({
   );
 
   const totales = useMemo(() => {
+    // Un renglón sin producto no se emite, así que tampoco cuenta en el total.
     const lineas = renglones
+      .filter((renglon) => renglon.codigo)
       .map((renglon) => ({
         cantidad: Number(renglon.cantidad),
         precioUnitario: Number(renglon.precio || 0),
+        ivaPorcentaje: ivaDeRenglon(renglon),
       }))
       .filter(
         (linea) =>
@@ -127,12 +139,8 @@ export function FormularioCotizacion({
           Number.isFinite(linea.precioUnitario),
       );
 
-    const porcentaje = iva.trim() === "" ? null : Number(iva);
-    return totalesDe(
-      lineas,
-      porcentaje !== null && Number.isFinite(porcentaje) ? porcentaje : null,
-    );
-  }, [renglones, iva]);
+    return totalesDe(lineas, null);
+  }, [renglones]);
 
   /* Atajos: Esc cierra, Ctrl+Enter guarda */
   useEffect(() => {
@@ -216,6 +224,7 @@ export function FormularioCotizacion({
         idProductoCore: renglon.codigo,
         cantidad: Number(renglon.cantidad),
         precioUnitario: Number(renglon.precio || 0),
+        ivaPorcentaje: ivaDeRenglon(renglon) ?? undefined,
         descripcion: renglon.descripcion.trim() || undefined,
       }));
 
@@ -229,6 +238,18 @@ export function FormularioCotizacion({
       )
     ) {
       setError("Cada renglón necesita una cantidad mayor que cero.");
+      return;
+    }
+    if (
+      lineas.some(
+        (linea) =>
+          linea.ivaPorcentaje !== undefined &&
+          (!Number.isFinite(linea.ivaPorcentaje) ||
+            linea.ivaPorcentaje < 0 ||
+            linea.ivaPorcentaje > 100),
+      )
+    ) {
+      setError("El IVA de cada renglón va entre 0 y 100 %, o vacío.");
       return;
     }
 
@@ -246,7 +267,6 @@ export function FormularioCotizacion({
         fechaEmision,
         vigenciaDias: Number(vigencia),
         estado,
-        ivaPorcentaje: iva.trim() === "" ? undefined : Number(iva),
         modalidadEntrega: modalidad || undefined,
         puntoEntrega: puntoEntrega.trim() || undefined,
         valorFlete: valorFlete.trim() === "" ? undefined : Number(valorFlete),
@@ -404,7 +424,7 @@ export function FormularioCotizacion({
           <fieldset className="flex flex-col gap-3 border-0 p-0">
             <legend className={seccion}>Emisión y vigencia</legend>
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <Campo id="cot-fecha" texto="Fecha de emisión *">
                 <input
                   id="cot-fecha"
@@ -448,22 +468,6 @@ export function FormularioCotizacion({
                   ))}
                 </select>
               </Campo>
-
-              <Campo id="cot-iva" texto="IVA (%)">
-                <input
-                  id="cot-iva"
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="any"
-                  inputMode="decimal"
-                  value={iva}
-                  onChange={(e) => setIva(e.target.value)}
-                  disabled={guardando}
-                  placeholder="Por confirmar"
-                  className={input}
-                />
-              </Campo>
             </div>
           </fieldset>
 
@@ -490,7 +494,7 @@ export function FormularioCotizacion({
                     key={renglon.clave}
                     className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3 dark:border-white/10"
                   >
-                    <div className="grid gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+                    <div className="grid gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_auto] sm:items-end">
                       <Campo
                         id={`cot-producto-${renglon.clave}`}
                         texto="Producto"
@@ -558,6 +562,31 @@ export function FormularioCotizacion({
                         />
                       </Campo>
 
+                      <Campo
+                        id={`cot-iva-${renglon.clave}`}
+                        texto="IVA (%)"
+                        menudo
+                      >
+                        <input
+                          id={`cot-iva-${renglon.clave}`}
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="any"
+                          inputMode="decimal"
+                          list="cot-tarifas-iva"
+                          value={renglon.iva}
+                          onChange={(e) =>
+                            actualizarRenglon(renglon.clave, {
+                              iva: e.target.value,
+                            })
+                          }
+                          disabled={guardando}
+                          placeholder="Por confirmar"
+                          className={input}
+                        />
+                      </Campo>
+
                       <button
                         type="button"
                         onClick={() => quitarRenglon(renglon.clave)}
@@ -592,6 +621,13 @@ export function FormularioCotizacion({
               })}
             </ul>
 
+            {/* Las tarifas vigentes en Colombia; se puede escribir otra. */}
+            <datalist id="cot-tarifas-iva">
+              {TARIFAS_IVA.map((tarifa) => (
+                <option key={tarifa} value={tarifa} />
+              ))}
+            </datalist>
+
             <dl className="ml-auto flex flex-col gap-1 text-sm">
               <div className="flex justify-between gap-6">
                 <dt className="text-slate-600 dark:text-slate-400">Subtotal</dt>
@@ -599,14 +635,28 @@ export function FormularioCotizacion({
                   {formatearPesos(totales.subtotal)}
                 </dd>
               </div>
-              <div className="flex justify-between gap-6">
-                <dt className="text-slate-600 dark:text-slate-400">IVA</dt>
-                <dd className="tabular-nums">
-                  {totales.iva === null
-                    ? "Por confirmar"
-                    : formatearPesos(totales.iva)}
-                </dd>
-              </div>
+              {totales.tramos.length === 0 ? (
+                <div className="flex justify-between gap-6">
+                  <dt className="text-slate-600 dark:text-slate-400">IVA</dt>
+                  <dd className="tabular-nums">{formatearPesos(0)}</dd>
+                </div>
+              ) : (
+                totales.tramos.map((tramo) => (
+                  <div
+                    key={tramo.porcentaje ?? "pendiente"}
+                    className="flex justify-between gap-6"
+                  >
+                    <dt className="text-slate-600 dark:text-slate-400">
+                      {rotuloTramoIva(tramo.porcentaje)}
+                    </dt>
+                    <dd className="tabular-nums">
+                      {tramo.iva === null
+                        ? "Por confirmar"
+                        : formatearPesos(tramo.iva)}
+                    </dd>
+                  </div>
+                ))
+              )}
               <div className="flex justify-between gap-6 border-t border-slate-200 pt-1 font-semibold dark:border-white/10">
                 <dt>Total</dt>
                 <dd className="tabular-nums">{formatearPesos(totales.total)}</dd>

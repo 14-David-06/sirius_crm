@@ -7,6 +7,7 @@ import {
 } from "@/lib/airtable";
 import { cachearLectura, ETIQUETAS } from "@/lib/cache";
 import {
+  ivaDeLinea,
   leerSerialCotizacion,
   serialCotizacion,
   serialLinea,
@@ -14,6 +15,7 @@ import {
   type EstadoCotizacion,
   type FormaPago,
   type ModalidadEntrega,
+  type TramoIva,
 } from "@/lib/cotizaciones-comun";
 import { env } from "@/lib/env";
 
@@ -83,6 +85,7 @@ const CAMPOS_DETALLE = {
   cantidad: "Cantidad",
   unidad: "Unidad",
   precioUnitario: "Precio Unitario",
+  ivaPorcentaje: "IVA Porcentaje",
 } as const;
 
 export {
@@ -99,8 +102,10 @@ export {
   formatearPesos,
   formatearRevision,
   formatearVigencia,
+  ivaDeLinea,
   MODALIDADES_ENTREGA,
   NOTA_MODALIDAD,
+  rotuloTramoIva,
   serialCotizacion,
   siguientesEstadosCotizacion,
   textoLegal,
@@ -113,6 +118,7 @@ export type {
   FormaPago,
   ModalidadEntrega,
   Totales,
+  TramoIva,
 } from "@/lib/cotizaciones-comun";
 
 export type LineaCotizacion = {
@@ -128,6 +134,11 @@ export type LineaCotizacion = {
   unidad: string | null;
   /** Precio congelado al emitir; 0 es un precio real (muestras comerciales). */
   precioUnitario: number;
+  /**
+   * La tarifa con la que se liquida el renglón: la suya o, en las cotizaciones
+   * anteriores al IVA por producto, la de la cabecera. null es por confirmar.
+   */
+  ivaPorcentaje: number | null;
   subtotal: number;
 };
 
@@ -153,7 +164,10 @@ export type Cotizacion = {
   fechaEnvio: string | null;
   fechaCierre: string | null;
   motivoCierre: string | null;
-  /** null es "por confirmar con facturación"; 0 es un IVA de 0 % real. */
+  /**
+   * La tarifa general de la cabecera. Las cotizaciones nuevas la dejan vacía
+   * porque cada renglón lleva la suya; la de cada renglón está en `lineas`.
+   */
   ivaPorcentaje: number | null;
   modalidadEntrega: string | null;
   puntoEntrega: string | null;
@@ -175,9 +189,11 @@ export type Cotizacion = {
   notasInternas: string | null;
   lineas: LineaCotizacion[];
   subtotal: number;
-  /** null mientras el IVA esté por confirmar. */
+  /** null mientras el IVA de algún renglón esté por confirmar. */
   iva: number | null;
   total: number;
+  /** El IVA discriminado por tarifa, como va en el documento. */
+  tramosIva: TramoIva[];
 };
 
 function numero(valor: unknown): number | null {
@@ -191,6 +207,10 @@ function vinculos(valor: unknown): string[] {
     : [];
 }
 
+/**
+ * El renglón tal como está en Airtable. `ivaPorcentaje` es solo el propio: la
+ * herencia de la cabecera se resuelve en `aCotizacion`, que es quien la conoce.
+ */
 function aLinea(registro: AirtableRecord): LineaCotizacion {
   const f = registro.fields;
   const cantidad = numero(f[CAMPOS_DETALLE.cantidad]) ?? 0;
@@ -207,16 +227,21 @@ function aLinea(registro: AirtableRecord): LineaCotizacion {
     cantidad,
     unidad: texto(f[CAMPOS_DETALLE.unidad]),
     precioUnitario,
+    ivaPorcentaje: numero(f[CAMPOS_DETALLE.ivaPorcentaje]),
     subtotal: cantidad * precioUnitario,
   };
 }
 
 function aCotizacion(
   registro: AirtableRecord,
-  lineas: LineaCotizacion[],
+  lineasPropias: LineaCotizacion[],
 ): Cotizacion {
   const f = registro.fields;
   const ivaPorcentaje = numero(f[CAMPOS_COTIZACION.ivaPorcentaje]);
+  const lineas = lineasPropias.map((linea) => ({
+    ...linea,
+    ivaPorcentaje: ivaDeLinea(linea, ivaPorcentaje),
+  }));
   const totales = totalesDe(lineas, ivaPorcentaje);
 
   return {
@@ -261,6 +286,7 @@ function aCotizacion(
     subtotal: totales.subtotal,
     iva: totales.iva,
     total: totales.total,
+    tramosIva: totales.tramos,
   };
 }
 
@@ -447,6 +473,8 @@ export type LineaNuevaCotizacion = {
   cantidad: number;
   unidad?: string;
   precioUnitario: number;
+  /** Sin él, el renglón toma el IVA general; si tampoco hay, queda por confirmar. */
+  ivaPorcentaje?: number;
 };
 
 export type EntradaCotizacion = {
@@ -464,6 +492,7 @@ export type EntradaCotizacion = {
   fechaEmision: string;
   vigenciaDias: number;
   estado: EstadoCotizacion;
+  /** IVA general: solo aplica a los renglones que no traen el suyo. */
   ivaPorcentaje?: number;
   modalidadEntrega?: ModalidadEntrega;
   puntoEntrega?: string;
@@ -570,19 +599,29 @@ export async function crearCotizacion(
   let orden = 0;
   for (const linea of entrada.lineas) {
     orden += 1;
+    const detalle: Record<string, unknown> = {
+      [CAMPOS_DETALLE.id]: serialLinea(serial, orden),
+      [CAMPOS_DETALLE.cotizacion]: [registro.id],
+      [CAMPOS_DETALLE.orden]: orden,
+      [CAMPOS_DETALLE.idProductoCore]: linea.idProductoCore,
+      [CAMPOS_DETALLE.producto]: linea.producto,
+      [CAMPOS_DETALLE.descripcion]: linea.descripcion ?? "",
+      [CAMPOS_DETALLE.fichaTecnica]: linea.fichaTecnica ?? "",
+      [CAMPOS_DETALLE.cantidad]: linea.cantidad,
+      [CAMPOS_DETALLE.unidad]: linea.unidad ?? "",
+      [CAMPOS_DETALLE.precioUnitario]: linea.precioUnitario,
+    };
+    // Vacío no es 0 %: se deja sin escribir para que herede o quede por confirmar.
+    if (linea.ivaPorcentaje !== undefined) {
+      detalle[CAMPOS_DETALLE.ivaPorcentaje] = linea.ivaPorcentaje;
+    }
+
     try {
-      await crearRegistro(env.baseCotizaciones, env.tablaDetallesCotizacion, {
-        [CAMPOS_DETALLE.id]: serialLinea(serial, orden),
-        [CAMPOS_DETALLE.cotizacion]: [registro.id],
-        [CAMPOS_DETALLE.orden]: orden,
-        [CAMPOS_DETALLE.idProductoCore]: linea.idProductoCore,
-        [CAMPOS_DETALLE.producto]: linea.producto,
-        [CAMPOS_DETALLE.descripcion]: linea.descripcion ?? "",
-        [CAMPOS_DETALLE.fichaTecnica]: linea.fichaTecnica ?? "",
-        [CAMPOS_DETALLE.cantidad]: linea.cantidad,
-        [CAMPOS_DETALLE.unidad]: linea.unidad ?? "",
-        [CAMPOS_DETALLE.precioUnitario]: linea.precioUnitario,
-      });
+      await crearRegistro(
+        env.baseCotizaciones,
+        env.tablaDetallesCotizacion,
+        detalle,
+      );
     } catch (error) {
       console.error("crear detalle de cotizacion", error);
       throw new Error(

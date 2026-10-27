@@ -597,10 +597,12 @@ export function registrarEscritura(servidor, api) {
       description:
         "Emite una oferta comercial con sus renglones y devuelve el consecutivo " +
         "COT-YYYY-NNN que le asigno el sistema. Si un renglon no trae precio se usa " +
-        "el de lista; manda 0 explicitamente para una muestra sin costo. Dejar el IVA " +
-        "sin definir NO es cero: el documento lo imprime como «por confirmar», que es " +
-        "lo correcto cuando facturacion todavia no lo ha dicho. Una cotizacion nueva " +
-        "solo puede nacer en Borrador o Enviada.",
+        "el de lista; manda 0 explicitamente para una muestra sin costo. El IVA va por " +
+        "renglon, porque unos productos estan gravados y otros no: 19 general, 5 " +
+        "reducido, 0 exento o excluido. Dejarlo sin definir NO es cero: el documento " +
+        "lo imprime como «por confirmar», que es lo correcto cuando facturacion " +
+        "todavia no lo ha dicho. Una cotizacion nueva solo puede nacer en Borrador o " +
+        "Enviada.",
       inputSchema: {
         cliente: z.string().describe("Serial CL-000X, record id o nombre."),
         titulo: z
@@ -618,6 +620,14 @@ export function registrarEscritura(servidor, api) {
                 .min(0)
                 .optional()
                 .describe("Sin el se toma el precio de lista vigente."),
+              ivaPorcentaje: z
+                .number()
+                .min(0)
+                .max(100)
+                .optional()
+                .describe(
+                  "IVA de este producto. Sin el toma el ivaPorcentaje general; si tampoco hay, queda por confirmar.",
+                ),
               descripcion: z
                 .string()
                 .optional()
@@ -642,7 +652,9 @@ export function registrarEscritura(servidor, api) {
           .min(0)
           .max(100)
           .optional()
-          .describe("Sin el, queda por confirmar con facturacion."),
+          .describe(
+            "IVA general: solo aplica a los renglones que no traen el suyo. Sin ninguno, queda por confirmar con facturacion.",
+          ),
         introduccion: z.string().optional(),
         modalidadEntrega: z.enum(MODALIDADES_ENTREGA).optional(),
         puntoEntrega: z.string().optional(),
@@ -700,6 +712,7 @@ export function registrarEscritura(servidor, api) {
             idProductoCore: producto.codigo,
             cantidad: linea.cantidad,
             precioUnitario: precio,
+            ivaPorcentaje: linea.ivaPorcentaje,
             descripcion: linea.descripcion,
           }),
         );
